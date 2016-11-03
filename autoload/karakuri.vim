@@ -233,3 +233,117 @@ let s:EnterWith = s:MapUI
 let s:LeaveWith = s:MapUI
 let s:Mapper = s:MapUI
 let s:Unmapper = s:MapUI
+
+
+finish
+
+" Simplified processes:
+"
+" 1. {enter-with-lhs}
+" 2. <Plug>karakuri.enter_with_rhs({submode})
+" 3. <Plug>karakuri.init({submode})
+" 4. <Plug>karakuri.in({submode})
+"   4.1. timeout -> Go to "5. <call-fallback-func>"
+"   4.2. User types a key {map-lhs}
+"     4.2.1. <Plug>karakuri.in({submode}){map-lhs} is defined:
+"       4.2.1.1. {map-lhs} is <leave-with-keyseqs> -> Go to "6. Finalization"
+"       4.2.1.2. {map-lhs} is not <leave-with-keyseqs>
+"         4.2.1.2.1. <Plug>karakuri.map_rhs({submode})
+"         4.2.1.2.2. <Plug>karakuri.prompt({submode})
+"         4.2.1.2.3. Go to "4. <Plug>karakuri.in({submode})"
+"     4.2.2. <Plug>karakuri.in({submode}){map-lhs} is NOT defined:
+"       4.2.2.1. Go to "5. <call-fallback-func>"
+" 5. <call-fallback-func>
+"   5.1. getchar(1) is true ({map-lhs} was typed but not matched)
+"     5.1.1. 'keep_leaving_key' is false -> getchar(0)
+"     5.1.2. 'inherit' is true -> feedkeys("\<Plug>karakuri.in(winsize)", 'm')
+"     5.1.3. Go to "6. Finalization"
+"   5.2. getchar(1) is false (timeout)
+"     5.2.1. Go to "6. Finalization"
+" 6. Finalization
+"   6.1. <call-finalize-func>
+"   6.2.  Go to parent mode.
+
+" Mapping definitions:
+"
+" {mode}map {enter-with-lhs} <Plug>karakuri.enter_with_rhs({submode})<Plug>karakuri.init({submode})<Plug>karakuri.in({submode})
+" {mode}map <Plug>karakuri.in({submode}){map-lhs} <Plug>karakuri.map_rhs({submode})<Plug>karakuri.prompt({submode})<Plug>karakuri.in({submode})
+
+" {mode}{nore}map {options} <Plug>karakuri.enter_with_rhs({submode}) {enter-with-rhs}
+" {mode}{nore}map {options} <Plug>karakuri.map_rhs({submode}) {map-rhs}
+
+" {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
+
+" {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs> <call-finalize-func>
+"   or <leave-with-keyseqs> is undefined:
+" {mode}noremap <expr> <Plug>karakuri.in({submode})<Esc> <call-finalize-func>
+
+" {mode}noremap <expr> <Plug>karakuri.in({submode}) <call-fallback-func>
+
+" {mode}noremap <expr> <Plug>karakuri.prompt({submode}) <call-prompt-func>
+
+
+
+" nnoremap <script> <C-w>> <SID>(winsize-init)<SID>(winsize-mode)>
+" nnoremap <script> <C-w>< <SID>(winsize-init)<SID>(winsize-mode)<
+" nnoremap <script> <C-w>+ <SID>(winsize-init)<SID>(winsize-mode)+
+" nnoremap <script> <C-w>- <SID>(winsize-init)<SID>(winsize-mode)-
+" nnoremap <script> <SID>(winsize-mode)> <C-w>><SID>(winsize-prompt)<SID>(winsize-mode)
+" nnoremap <script> <SID>(winsize-mode)< <C-w><<SID>(winsize-prompt)<SID>(winsize-mode)
+" nnoremap <script> <SID>(winsize-mode)+ <C-w>+<SID>(winsize-prompt)<SID>(winsize-mode)
+" nnoremap <script> <SID>(winsize-mode)- <C-w>-<SID>(winsize-prompt)<SID>(winsize-mode)
+
+" 初期化処理
+nnoremap <silent> <SID>(winsize-init) :<C-u>call <SID>winsize_init()<CR>
+
+" 終了処理
+" <Esc> を明示的に押された場合のみサブモードを終了
+nnoremap <silent> <SID>(winsize-mode)<Esc> :<C-u>call <SID>winsize_finalize()<CR>
+
+" フォールバック：サブモードで定義していないマッピングが押された場合の処理
+nnoremap <silent> <SID>(winsize-mode)      :<C-u>call <SID>winsize_fallback()<CR>
+
+" プロンプトをコマンドラインに表示
+nnoremap <silent> <SID>(winsize-prompt) :<C-u>call <SID>winsize_prompt()<CR>
+
+function! s:winsize_prompt() abort
+  redraw
+  echohl ModeMsg
+  echo '-- Submode: winsize --'
+  echohl None
+endfunction
+
+" winsize サブモードではタイムアウトなしに設定することにする
+function! s:winsize_init() abort
+  let s:winsize_options = {}
+  let s:winsize_options.timeout = &timeout
+  let &timeout = 0
+  " let s:winsize_options.timeoutlen = &timeoutlen
+  " let &timeoutlen = ...
+endfunction
+
+function! s:winsize_finalize() abort
+  " サブモードで定義されていないマッピングが押された場合はサブモードを抜けた後に実行しない
+  call getchar(0)
+  if exists('s:winsize_options')
+    let &timeout = get(s:winsize_options, 'timeout', &timeout)
+    " let &timeoutlen = get(s:winsize_options, 'timeoutlen', &timeoutlen)
+  endif
+  " プロンプトをクリア
+  echo ' '
+  redraw
+endfunction
+
+" サブモードで定義していないマッピングが押されたら
+" ノーマルモードのマッピングを実行した後サブモードに戻ってくる
+function! s:winsize_fallback() abort
+  if getchar(1)
+    call s:winsize_finalize()
+  else
+    call feedkeys("\<SNR>" . s:SID() . "_(winsize-mode)", 'm')
+  endif
+endfunction
+
+function! s:SID() abort
+  return matchstr(expand('<sfile>'), '<SNR>\zs\d\+\ze_SID$')
+endfunction
