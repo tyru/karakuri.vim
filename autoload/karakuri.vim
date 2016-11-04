@@ -376,21 +376,27 @@ finish
 
 " Mapping definitions:
 "
-" {mode}map {enter-with-lhs} <Plug>karakuri.enter_with_rhs({submode})<Plug>karakuri.init({submode})<Plug>karakuri.in({submode})
-" {mode}map <Plug>karakuri.in({submode}){map-lhs} <Plug>karakuri.map_rhs({submode})<Plug>karakuri.prompt({submode})<Plug>karakuri.in({submode})
+" enter_with() defines:
+"   * {mode}map {enter-with-lhs} <Plug>karakuri.enter_with_rhs({submode})<Plug>karakuri.init({submode})<Plug>karakuri.in({submode})
+"   * {mode}{nore}map {options} <Plug>karakuri.enter_with_rhs({submode}) {enter-with-rhs}
+" If leave_with() is not called yet:
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<Esc> <call-finalize-func>
+"
+" map() defines:
+"   * {mode}map <Plug>karakuri.in({submode}){map-lhs} <Plug>karakuri.map_rhs({submode})<Plug>karakuri.prompt({submode})<Plug>karakuri.in({submode})
+"   * {mode}{nore}map {options} <Plug>karakuri.map_rhs({submode}) {map-rhs}
+" If leave_with() is not called yet:
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs> <call-finalize-func>
 
-" {mode}{nore}map {options} <Plug>karakuri.enter_with_rhs({submode}) {enter-with-rhs}
-" {mode}{nore}map {options} <Plug>karakuri.map_rhs({submode}) {map-rhs}
-
-" {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
-
-" {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs> <call-finalize-func>
-"   or <leave-with-keyseqs> is undefined:
-" {mode}noremap <expr> <Plug>karakuri.in({submode})<Esc> <call-finalize-func>
-
-" {mode}noremap <expr> <Plug>karakuri.in({submode}) <call-fallback-func>
-
-" {mode}noremap <expr> <Plug>karakuri.prompt({submode}) <call-prompt-func>
+" leave_with() defines:
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-rhs> <call-finalize-func>
+" leave_with() undefines (if it was defined):
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs>
+"
+" When one of above methods is called at first, it defines:
+"   * {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode}) <call-fallback-func>
+"   * {mode}noremap <expr> <Plug>karakuri.prompt({submode}) <call-prompt-func>
 
 
 
