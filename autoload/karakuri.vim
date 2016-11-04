@@ -154,7 +154,7 @@ endfunction
 "   * MapUI.keyseqs_to_leave(keyseqs : List) : MapUI
 "   * MapUI.always_show_submode(b : Bool) : MapUI
 "
-"   * MapUI.exec() : MapUI
+"   * MapUI.exec() : Unit
 "
 
 let s:MAP_UI_DEFAULT_OPTIONS = {
@@ -202,80 +202,95 @@ function! s:MapUI_mode(modes) abort dict
     call s:throw(self._submode, "Invalid character '" . a:modes[pos] . "' in the argument of .mode().")
   endif
   let self._local.modes = a:modes
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'mode')
 
 function! s:MapUI_lhs(lhs) abort dict
   call s:validate(self._submode, a:lhs, s:TYPE_STRING)
   let self._local.lhs = a:lhs
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'lhs')
 
 function! s:MapUI_rhs(rhs) abort dict
   call s:validate(self._submode, a:rhs, s:TYPE_STRING)
   let self._local.rhs = a:rhs
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'rhs')
 
 function! s:MapUI_silent(b) abort dict
   let self._local.silent = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'silent')
 
 function! s:MapUI_noremap(b) abort dict
   let self._local.noremap = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'noremap')
 
 function! s:MapUI_expr(b) abort dict
   let self._local.expr = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'expr')
 
 function! s:MapUI_buffer(b) abort dict
   let self._local.buffer = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'buffer')
 
 function! s:MapUI_nowait(b) abort dict
   let self._local.nowait = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'nowait')
 
 function! s:MapUI_timeout(b) abort dict
   let self._local.timeout = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'timeout')
 
 function! s:MapUI_timeoutlen(msec) abort dict
   call s:validate(self._submode, a:msec, s:TYPE_NUMBER)
   let self._local.timeoutlen = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'timeoutlen')
 
 function! s:MapUI_showmode(b) abort dict
   let self._local.showmode = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'showmode')
 
 function! s:MapUI_inherit(b) abort dict
   let self._local.inherit = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'inherit')
 
 function! s:MapUI_keep_leaving_key(b) abort dict
   let self._local.keep_leaving_key = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'keep_leaving_key')
 
 function! s:MapUI_keyseqs_to_leave(keyseqs) abort dict
   call s:validate(self._submode, a:keyseqs, s:TYPE_LIST)
   let self._local.keyseqs_to_leave = a:keyseqs
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'keyseqs_to_leave')
 
 function! s:MapUI_always_show_submode(b) abort dict
   let self._local.always_show_submode = !!a:b
+  return self
 endfunction
 call s:method(s:, 'MapUI', 'always_show_submode')
 
@@ -379,24 +394,35 @@ finish
 " enter_with() defines:
 "   * {mode}map {enter-with-lhs} <Plug>karakuri.enter_with_rhs({submode})<Plug>karakuri.init({submode})<Plug>karakuri.in({submode})
 "   * {mode}{nore}map {options} <Plug>karakuri.enter_with_rhs({submode}) {enter-with-rhs}
-" If leave_with() is not called yet:
+" If leave_with() is not called yet (*1):
 "   * {mode}noremap <expr> <Plug>karakuri.in({submode})<Esc> <call-finalize-func>
 "
 " map() defines:
 "   * {mode}map <Plug>karakuri.in({submode}){map-lhs} <Plug>karakuri.map_rhs({submode})<Plug>karakuri.prompt({submode})<Plug>karakuri.in({submode})
 "   * {mode}{nore}map {options} <Plug>karakuri.map_rhs({submode}) {map-rhs}
-" If leave_with() is not called yet:
+" If leave_with() is not called yet (*1):
 "   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs> <call-finalize-func>
 
 " leave_with() defines:
 "   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-rhs> <call-finalize-func>
-" leave_with() undefines (if it was defined):
+" leave_with() undefines (if it was defined) (*1):
 "   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs>
 "
-" When one of above methods is called at first, it defines:
+" When one of above methods is called at first, it defines (*1):
 "   * {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
 "   * {mode}noremap <expr> <Plug>karakuri.in({submode}) <call-fallback-func>
 "   * {mode}noremap <expr> <Plug>karakuri.prompt({submode}) <call-prompt-func>
+"
+" *1 : These checks can be omitted when multiple mappings
+"      are defined like the following:
+"
+"        call s:unredo
+"          \.enter_with().mode('n').lhs('g-').rhs('g-')
+"          \.enter_with().mode('n').lhs('g+').rhs('g+')
+"          \.map().mode('n').lhs('-').rhs('g-')
+"          \.map().mode('n').lhs('+').rhs('g+')
+"          \.exec()
+"
 
 
 
@@ -468,34 +494,22 @@ endfunction
 " ============= Examples =============
 
 " submode.vim compatible interface
-call karakuri#enter_with('winsize', 'n', '', '<C-w>>', '<C-w>>')
-call karakuri#enter_with('winsize', 'n', '', '<C-w><', '<C-w><')
-call karakuri#enter_with('winsize', 'n', '', '<C-w>+', '<C-w>-')
-call karakuri#enter_with('winsize', 'n', '', '<C-w>-', '<C-w>+')
-call karakuri#map('winsize', 'n', '', '>', '<C-w>>')
-call karakuri#map('winsize', 'n', '', '<', '<C-w><')
-call karakuri#map('winsize', 'n', '', '+', '<C-w>-')
-call karakuri#map('winsize', 'n', '', '-', '<C-w>+')
+call karakuri#enter_with('undo/redo', 'n', '', 'g-', 'g-')
+call karakuri#enter_with('undo/redo', 'n', '', 'g+', 'g+')
+call karakuri#map('undo/redo', 'n', '', '-', 'g-')
+call karakuri#map('undo/redo', 'n', '', '+', 'g+')
 
 " Builder interface
-let s:winsize = karakuri#builder('winsize')
-call s:winsize.enter_with().mode('n').lhs('<C-w>>').rhs('<C-w>>').exec()
-call s:winsize.enter_with().mode('n').lhs('<C-w><').rhs('<C-w><').exec()
-call s:winsize.enter_with().mode('n').lhs('<C-w>+').rhs('<C-w>+').exec()
-call s:winsize.enter_with().mode('n').lhs('<C-w>-').rhs('<C-w>-').exec()
+let s:unredo = karakuri#builder('undo/redo')
+call s:unredo.enter_with().mode('n').lhs('g-').rhs('g-').exec()
+call s:unredo.enter_with().mode('n').lhs('g+').rhs('g+').exec()
+call s:unredo.map().mode('n').lhs('-').rhs('g-').exec()
+call s:unredo.map().mode('n').lhs('+').rhs('g+').exec()
 
-" More fluent builder interface
-call s:winsize.enter_with()
-    \.mode('n').lhs('<C-w>>').rhs('<C-w>>').exec()
-    \.mode('n').lhs('<C-w><').rhs('<C-w><').exec()
-    \.mode('n').lhs('<C-w>+').rhs('<C-w>+').exec()
-    \.mode('n').lhs('<C-w>-').rhs('<C-w>-').exec()
-
-" 'prototype object' is returned by EnterWith.exec() so .exec() finds:
-" * a left mapping is a normal mode mapping even without ".mode('n')"
-" * a left mapping's timeout option is off even without ".timeout(0)"
-call s:winsize.map({'prototype': {'mode': 'n', 'timeout': 0}})
-    \.lhs('>').rhs('<C-w>>').exec()
-    \.lhs('<').rhs('<C-w><').exec()
-    \.lhs('+').rhs('<C-w>+').exec()
-    \.lhs('-').rhs('<C-w>-').exec()
+" More fluent builder example
+call s:unredo
+  \.enter_with().mode('n').lhs('g-').rhs('g-')
+  \.enter_with().mode('n').lhs('g+').rhs('g+')
+  \.map().mode('n').lhs('-').rhs('g-')
+  \.map().mode('n').lhs('+').rhs('g+')
+  \.exec()
