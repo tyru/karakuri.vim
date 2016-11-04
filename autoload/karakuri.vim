@@ -123,38 +123,46 @@ endfunction
 "
 
 function! karakuri#builder(submode) abort
-  let builder = deepcopy(s:Builder)
-  let Builder._submode = a:submode
-  return builder
+  return s:Builder_new(a:submode)
 endfunction
 
 
-" Map interface object:
+" Builder:
+"   Builder interface object.
+"   karakuri#builder() returns this object.
 "
 " Properties:
 "   * _submode: submode
 "   * _local: {<same property keys as method names> ...}
-"   * _prototype: {<same property keys as method names> ...}
 "
 " Methods:
-"   * MapUI.mode(modes : Modes) : MapUI
-"   * MapUI.lhs(lhs : String) : MapUI
-"   * MapUI.rhs(rhs : String) : MapUI
-"   * MapUI.silent(b : Bool) : MapUI
-"   * MapUI.noremap(b : Bool) : MapUI
-"   * MapUI.expr(b : Bool) : MapUI
-"   * MapUI.buffer(b : Bool) : MapUI
-"   * MapUI.nowait(b : Bool) : MapUI
+"   * Builder.enter_with(options : Dictionary) : EnterWith
+"       EnterWith is a Builder
+"   * Builder.leave_with(options : Dictionary) : LeaveWith
+"       LeaveWith is a Builder
+"   * Builder.map(options : Dictionary) : Mapper
+"       Mapper is a Builder
+"   * Builder.unmap(options : Dictionary) : Unmapper
+"       Unmapper is a Builder
 "
-"   * MapUI.timeout(b : Bool) : MapUI
-"   * MapUI.timeoutlen(msec : Number) : MapUI
-"   * MapUI.showmode(b : Bool) : MapUI
-"   * MapUI.inherit(b : Bool) : MapUI
-"   * MapUI.keep_leaving_key(b : Bool) : MapUI
-"   * MapUI.keyseqs_to_leave(keyseqs : List) : MapUI
-"   * MapUI.always_show_submode(b : Bool) : MapUI
+"   * Builder.mode(modes : Modes) : Builder
+"   * Builder.lhs(lhs : String) : Builder
+"   * Builder.rhs(rhs : String) : Builder
+"   * Builder.silent(b : Bool) : Builder
+"   * Builder.noremap(b : Bool) : Builder
+"   * Builder.expr(b : Bool) : Builder
+"   * Builder.buffer(b : Bool) : Builder
+"   * Builder.nowait(b : Bool) : Builder
 "
-"   * MapUI.exec() : Unit
+"   * Builder.timeout(b : Bool) : Builder
+"   * Builder.timeoutlen(msec : Number) : Builder
+"   * Builder.showmode(b : Bool) : Builder
+"   * Builder.inherit(b : Bool) : Builder
+"   * Builder.keep_leaving_key(b : Bool) : Builder
+"   * Builder.keyseqs_to_leave(keyseqs : List) : Builder
+"   * Builder.always_show_submode(b : Bool) : Builder
+"
+"   * Builder.exec() : Unit
 "
 
 let s:MAP_UI_DEFAULT_OPTIONS = {
@@ -172,30 +180,43 @@ let s:MAP_UI_DEFAULT_OPTIONS = {
 \ 'always_show_submode': 0
 \}
 
-function! s:MapUI_new(builder, ...) abort
-  let ui = deepcopy(s:MapUI)
-  let ui._submode = a:builder._submode
-  let ui._local = {}
-  if a:0 && type(a:1) is s:TYPE_DICT
-  \ && has_key(a:1, 'prototype') && type(a:1.prototype) is s:TYPE_DICT
-    let ui._prototype = a:1.prototype
-  else
-    let ui._prototype = {}
-  endif
-  return ui
+function! s:Builder_new(submode) abort
+  let builder = deepcopy(s:Builder)
+  let builder._submode = a:submode
+  let builder._local = {}
+  return builder
 endfunction
 
-function! s:MapUI_get(this, key) abort
+function! s:Builder_get(this, key) abort
   return has_key(a:this._local, a:key) ? a:this._local[a:key] :
-  \       has_key(a:this._prototype, a:key) ? a:this._prototype[a:key] :
   \       has_key(s:MAP_UI_DEFAULT_OPTIONS, a:key) ? s:MAP_UI_DEFAULT_OPTIONS[a:key] :
   \       s:throw(a:this._submode, "Required key '" . a:key . "' was not given.")
 endfunction
 
 
-let s:MapUI = {}
+let s:Builder = {}
 
-function! s:MapUI_mode(modes) abort dict
+function! s:Builder_enter_with(...) abort dict
+  " TODO
+endfunction
+call s:method(s:, 'Builder', 'enter_with')
+
+function! s:Builder_leave_with(...) abort dict
+  " TODO
+endfunction
+call s:method(s:, 'Builder', 'leave_with')
+
+function! s:Builder_map(...) abort dict
+  " TODO
+endfunction
+call s:method(s:, 'Builder', 'map')
+
+function! s:Builder_unmap(...) abort dict
+  " TODO
+endfunction
+call s:method(s:, 'Builder', 'unmap')
+
+function! s:Builder_mode(modes) abort dict
   call s:validate(self._submode, a:modes, s:TYPE_STRING)
   let pos = match(a:modes, '[^nvoicsxl]')
   if pos isnot -1
@@ -204,160 +225,118 @@ function! s:MapUI_mode(modes) abort dict
   let self._local.modes = a:modes
   return self
 endfunction
-call s:method(s:, 'MapUI', 'mode')
+call s:method(s:, 'Builder', 'mode')
 
-function! s:MapUI_lhs(lhs) abort dict
+function! s:Builder_lhs(lhs) abort dict
   call s:validate(self._submode, a:lhs, s:TYPE_STRING)
   let self._local.lhs = a:lhs
   return self
 endfunction
-call s:method(s:, 'MapUI', 'lhs')
+call s:method(s:, 'Builder', 'lhs')
 
-function! s:MapUI_rhs(rhs) abort dict
+function! s:Builder_rhs(rhs) abort dict
   call s:validate(self._submode, a:rhs, s:TYPE_STRING)
   let self._local.rhs = a:rhs
   return self
 endfunction
-call s:method(s:, 'MapUI', 'rhs')
+call s:method(s:, 'Builder', 'rhs')
 
-function! s:MapUI_silent(b) abort dict
+function! s:Builder_silent(b) abort dict
   let self._local.silent = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'silent')
+call s:method(s:, 'Builder', 'silent')
 
-function! s:MapUI_noremap(b) abort dict
+function! s:Builder_noremap(b) abort dict
   let self._local.noremap = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'noremap')
+call s:method(s:, 'Builder', 'noremap')
 
-function! s:MapUI_expr(b) abort dict
+function! s:Builder_expr(b) abort dict
   let self._local.expr = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'expr')
+call s:method(s:, 'Builder', 'expr')
 
-function! s:MapUI_buffer(b) abort dict
+function! s:Builder_buffer(b) abort dict
   let self._local.buffer = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'buffer')
+call s:method(s:, 'Builder', 'buffer')
 
-function! s:MapUI_nowait(b) abort dict
+function! s:Builder_nowait(b) abort dict
   let self._local.nowait = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'nowait')
+call s:method(s:, 'Builder', 'nowait')
 
-function! s:MapUI_timeout(b) abort dict
+function! s:Builder_timeout(b) abort dict
   let self._local.timeout = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'timeout')
+call s:method(s:, 'Builder', 'timeout')
 
-function! s:MapUI_timeoutlen(msec) abort dict
+function! s:Builder_timeoutlen(msec) abort dict
   call s:validate(self._submode, a:msec, s:TYPE_NUMBER)
   let self._local.timeoutlen = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'timeoutlen')
+call s:method(s:, 'Builder', 'timeoutlen')
 
-function! s:MapUI_showmode(b) abort dict
+function! s:Builder_showmode(b) abort dict
   let self._local.showmode = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'showmode')
+call s:method(s:, 'Builder', 'showmode')
 
-function! s:MapUI_inherit(b) abort dict
+function! s:Builder_inherit(b) abort dict
   let self._local.inherit = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'inherit')
+call s:method(s:, 'Builder', 'inherit')
 
-function! s:MapUI_keep_leaving_key(b) abort dict
+function! s:Builder_keep_leaving_key(b) abort dict
   let self._local.keep_leaving_key = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'keep_leaving_key')
+call s:method(s:, 'Builder', 'keep_leaving_key')
 
-function! s:MapUI_keyseqs_to_leave(keyseqs) abort dict
+function! s:Builder_keyseqs_to_leave(keyseqs) abort dict
   call s:validate(self._submode, a:keyseqs, s:TYPE_LIST)
   let self._local.keyseqs_to_leave = a:keyseqs
   return self
 endfunction
-call s:method(s:, 'MapUI', 'keyseqs_to_leave')
+call s:method(s:, 'Builder', 'keyseqs_to_leave')
 
-function! s:MapUI_always_show_submode(b) abort dict
+function! s:Builder_always_show_submode(b) abort dict
   let self._local.always_show_submode = !!a:b
   return self
 endfunction
-call s:method(s:, 'MapUI', 'always_show_submode')
+call s:method(s:, 'Builder', 'always_show_submode')
 
-function! s:MapUI_exec() abort dict
-  let modes = s:MapUI_get(self, 'modes')
-  let mapcmd = (s:MapUI_get(self, 'noremap') ? 'noremap' : 'map')
+function! s:Builder_exec() abort dict
+  let modes = s:Builder_get(self, 'modes')
+  let mapcmd = (s:Builder_get(self, 'noremap') ? 'noremap' : 'map')
   let args = []
-  if s:MapUI_get(self, 'silent')
+  if s:Builder_get(self, 'silent')
     let args += ['<silent>']
   endif
-  if s:MapUI_get(self, 'expr')
+  if s:Builder_get(self, 'expr')
     let args += ['<expr>']
   endif
-  if s:MapUI_get(self, 'buffer')
+  if s:Builder_get(self, 'buffer')
     let args += ['<buffer>']
   endif
-  if s:MapUI_get(self, 'nowait')
+  if s:Builder_get(self, 'nowait')
     let args += ['<nowait>']
   endif
-  let args += [s:MapUI_get(self, 'lhs'), s:MapUI_get(self, 'rhs')]
+  let args += [s:Builder_get(self, 'lhs'), s:Builder_get(self, 'rhs')]
   for mode in split(modes, '\zs')
     execute join([mode . mapcmd] + args)
   endfor
 endfunction
-call s:method(s:, 'MapUI', 'exec')
-
-
-" Builder object:
-"   karakuri#builder() returns this object.
-"   This object provides accesses to each object
-"   which defines submode mappings.
-"
-" Properties:
-"   * _submode: submode
-"
-" Methods:
-"   * Builder.enter_with(options : Dictionary) : EnterWith
-"       EnterWith is a MapUI
-"   * Builder.leave_with(options : Dictionary) : LeaveWith
-"       LeaveWith is a MapUI
-"   * Builder.map(options : Dictionary) : Mapper
-"       Mapper is a MapUI
-"   * Builder.unmap(options : Dictionary) : Unmapper
-"       Unmapper is a MapUI
-"
-
-let s:Builder = {}
-
-function! s:Builder_enter_with(...) abort dict
-  return call('s:MapUI_new', [self] + a:000)
-endfunction
-call s:method(s:, 'Builder', 'enter_with')
-
-function! s:Builder_leave_with(...) abort dict
-  return call('s:MapUI_new', [self] + a:000)
-endfunction
-call s:method(s:, 'Builder', 'leave_with')
-
-function! s:Builder_map(...) abort dict
-  return call('s:MapUI_new', [self] + a:000)
-endfunction
-call s:method(s:, 'Builder', 'map')
-
-function! s:Builder_unmap(...) abort dict
-  return call('s:MapUI_new', [self] + a:000)
-endfunction
-call s:method(s:, 'Builder', 'unmap')
+call s:method(s:, 'Builder', 'exec')
 
 
 finish
