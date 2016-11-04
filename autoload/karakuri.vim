@@ -117,32 +117,22 @@ function! karakuri#unmap(submode, modes, options, lhs) abort
 endfunction
 
 
-" The entrance to core logic:
-"
-" * karakuri#builder(submode : String) : Builder
-"
-
-function! karakuri#builder(submode) abort
-  return s:Builder_new(a:submode)
-endfunction
-
-
 " Builder:
 "   Builder interface object.
-"   karakuri#builder() returns this object.
 "
 " Properties:
 "   * _submode: submode
-"   * _local: {<same property keys as method names> ...}
+"   * _env: [<_map> ...]
+"   * _map: {<same property keys as method names> ...}
 "
 " Methods:
-"   * Builder.enter_with(options : Dictionary) : EnterWith
+"   * Builder.enter_with() : EnterWith
 "       EnterWith is a Builder
-"   * Builder.leave_with(options : Dictionary) : LeaveWith
+"   * Builder.leave_with() : LeaveWith
 "       LeaveWith is a Builder
-"   * Builder.map(options : Dictionary) : Mapper
+"   * Builder.map() : Mapper
 "       Mapper is a Builder
-"   * Builder.unmap(options : Dictionary) : Unmapper
+"   * Builder.unmap() : Unmapper
 "       Unmapper is a Builder
 "
 "   * Builder.mode(modes : Modes) : Builder
@@ -180,39 +170,55 @@ let s:MAP_UI_DEFAULT_OPTIONS = {
 \ 'always_show_submode': 0
 \}
 
-function! s:Builder_new(submode) abort
+function! s:Builder_new(submode, init) abort
+  if a:submode ==# ''
+    call s:throw('', 'Submode cannot be empty.')
+  endif
+  if index(['enter_with', 'leave_with', 'map', 'unmap'], a:init) is -1
+    call s:throw(a:submode, "Invalid init method name '" . a:init . "'")
+  endif
   let builder = deepcopy(s:Builder)
   let builder._submode = a:submode
-  let builder._local = {}
-  return builder
+  let builder._env = []
+  " s:Builder_push_map() checks if '_map' key exists.
+  " let builder._map = {}
+  return builder[a:init]()
 endfunction
 
 function! s:Builder_get(this, key) abort
-  return has_key(a:this._local, a:key) ? a:this._local[a:key] :
+  return has_key(a:this._map, a:key) ? a:this._map[a:key] :
   \       has_key(s:MAP_UI_DEFAULT_OPTIONS, a:key) ? s:MAP_UI_DEFAULT_OPTIONS[a:key] :
   \       s:throw(a:this._submode, "Required key '" . a:key . "' was not given.")
+endfunction
+
+function! s:Builder_push_map(this) abort
+  if has_key(a:this, '_map')
+    let a:this._env += [a:this._map]
+  endif
+  let a:this._map = {}
+  return a:this
 endfunction
 
 
 let s:Builder = {}
 
-function! s:Builder_enter_with(...) abort dict
-  " TODO
+function! s:Builder_enter_with() abort dict
+  return s:Builder_push_map(self)
 endfunction
 call s:method(s:, 'Builder', 'enter_with')
 
-function! s:Builder_leave_with(...) abort dict
-  " TODO
+function! s:Builder_leave_with() abort dict
+  return s:Builder_push_map(self)
 endfunction
 call s:method(s:, 'Builder', 'leave_with')
 
-function! s:Builder_map(...) abort dict
-  " TODO
+function! s:Builder_map() abort dict
+  return s:Builder_push_map(self)
 endfunction
 call s:method(s:, 'Builder', 'map')
 
-function! s:Builder_unmap(...) abort dict
-  " TODO
+function! s:Builder_unmap() abort dict
+  return s:Builder_push_map(self)
 endfunction
 call s:method(s:, 'Builder', 'unmap')
 
@@ -222,95 +228,95 @@ function! s:Builder_mode(modes) abort dict
   if pos isnot -1
     call s:throw(self._submode, "Invalid character '" . a:modes[pos] . "' in the argument of .mode().")
   endif
-  let self._local.modes = a:modes
+  let self._map.modes = a:modes
   return self
 endfunction
 call s:method(s:, 'Builder', 'mode')
 
 function! s:Builder_lhs(lhs) abort dict
   call s:validate(self._submode, a:lhs, s:TYPE_STRING)
-  let self._local.lhs = a:lhs
+  let self._map.lhs = a:lhs
   return self
 endfunction
 call s:method(s:, 'Builder', 'lhs')
 
 function! s:Builder_rhs(rhs) abort dict
   call s:validate(self._submode, a:rhs, s:TYPE_STRING)
-  let self._local.rhs = a:rhs
+  let self._map.rhs = a:rhs
   return self
 endfunction
 call s:method(s:, 'Builder', 'rhs')
 
 function! s:Builder_silent(b) abort dict
-  let self._local.silent = !!a:b
+  let self._map.silent = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'silent')
 
 function! s:Builder_noremap(b) abort dict
-  let self._local.noremap = !!a:b
+  let self._map.noremap = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'noremap')
 
 function! s:Builder_expr(b) abort dict
-  let self._local.expr = !!a:b
+  let self._map.expr = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'expr')
 
 function! s:Builder_buffer(b) abort dict
-  let self._local.buffer = !!a:b
+  let self._map.buffer = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'buffer')
 
 function! s:Builder_nowait(b) abort dict
-  let self._local.nowait = !!a:b
+  let self._map.nowait = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'nowait')
 
 function! s:Builder_timeout(b) abort dict
-  let self._local.timeout = !!a:b
+  let self._map.timeout = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'timeout')
 
 function! s:Builder_timeoutlen(msec) abort dict
   call s:validate(self._submode, a:msec, s:TYPE_NUMBER)
-  let self._local.timeoutlen = !!a:b
+  let self._map.timeoutlen = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'timeoutlen')
 
 function! s:Builder_showmode(b) abort dict
-  let self._local.showmode = !!a:b
+  let self._map.showmode = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'showmode')
 
 function! s:Builder_inherit(b) abort dict
-  let self._local.inherit = !!a:b
+  let self._map.inherit = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'inherit')
 
 function! s:Builder_keep_leaving_key(b) abort dict
-  let self._local.keep_leaving_key = !!a:b
+  let self._map.keep_leaving_key = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'keep_leaving_key')
 
 function! s:Builder_keyseqs_to_leave(keyseqs) abort dict
   call s:validate(self._submode, a:keyseqs, s:TYPE_LIST)
-  let self._local.keyseqs_to_leave = a:keyseqs
+  let self._map.keyseqs_to_leave = a:keyseqs
   return self
 endfunction
 call s:method(s:, 'Builder', 'keyseqs_to_leave')
 
 function! s:Builder_always_show_submode(b) abort dict
-  let self._local.always_show_submode = !!a:b
+  let self._map.always_show_submode = !!a:b
   return self
 endfunction
 call s:method(s:, 'Builder', 'always_show_submode')
@@ -479,8 +485,10 @@ call karakuri#map('undo/redo', 'n', '', '-', 'g-')
 call karakuri#map('undo/redo', 'n', '', '+', 'g+')
 
 " Builder interface
-let s:unredo = karakuri#builder('undo/redo')
-call s:unredo.enter_with().mode('n').lhs('g-').rhs('g-').exec()
+let s:unredo = karakuri#enter_with('undo/redo')
+" Ugly...
+" call s:unredo.enter_with().mode('n').lhs('g-').rhs('g-').exec()
+call s:unredo.mode('n').lhs('g-').rhs('g-').exec()
 call s:unredo.enter_with().mode('n').lhs('g+').rhs('g+').exec()
 call s:unredo.map().mode('n').lhs('-').rhs('g-').exec()
 call s:unredo.map().mode('n').lhs('+').rhs('g+').exec()
