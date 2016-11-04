@@ -1,5 +1,70 @@
 scriptencoding utf-8
 
+"
+" Simplified processes:
+"
+" 1. {enter-with-lhs}
+" 2. <Plug>karakuri.enter_with_rhs({submode})
+" 3. <Plug>karakuri.init({submode})
+" 4. <Plug>karakuri.in({submode})
+"   4.1. timeout -> Go to "5. <call-fallback-func>"
+"   4.2. User types a key {map-lhs}
+"     4.2.1. <Plug>karakuri.in({submode}){map-lhs} is defined:
+"       4.2.1.1. {map-lhs} is <leave-with-keyseqs> -> Go to "6. Finalization"
+"       4.2.1.2. {map-lhs} is not <leave-with-keyseqs>
+"         4.2.1.2.1. <Plug>karakuri.map_rhs({submode})
+"         4.2.1.2.2. <Plug>karakuri.prompt({submode})
+"         4.2.1.2.3. Go to "4. <Plug>karakuri.in({submode})"
+"     4.2.2. <Plug>karakuri.in({submode}){map-lhs} is NOT defined:
+"       4.2.2.1. Go to "5. <call-fallback-func>"
+" 5. <call-fallback-func>
+"   5.1. getchar(1) is true ({map-lhs} was typed but not matched)
+"     5.1.1. 'keep_leaving_key' is false -> getchar(0)
+"     5.1.2. 'inherit' is true -> feedkeys("\<Plug>karakuri.in(winsize)", 'm')
+"     5.1.3. Go to "6. Finalization"
+"   5.2. getchar(1) is false (timeout)
+"     5.2.1. Go to "6. Finalization"
+" 6. Finalization
+"   6.1. <call-finalize-func>
+"   6.2.  Go to parent mode.
+"
+" ==============================================================================
+"
+" Mapping definitions:
+"
+" enter_with() defines:
+"   * {mode}map {enter-with-lhs} <Plug>karakuri.enter_with_rhs({submode})<Plug>karakuri.init({submode})<Plug>karakuri.in({submode})
+"   * {mode}{nore}map {options} <Plug>karakuri.enter_with_rhs({submode}) {enter-with-rhs}
+" If leave_with() is not called yet (*1):
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<Esc> <call-finalize-func>
+"
+" map() defines:
+"   * {mode}map <Plug>karakuri.in({submode}){map-lhs} <Plug>karakuri.map_rhs({submode})<Plug>karakuri.prompt({submode})<Plug>karakuri.in({submode})
+"   * {mode}{nore}map {options} <Plug>karakuri.map_rhs({submode}) {map-rhs}
+" If leave_with() is not called yet (*1):
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs> <call-finalize-func>
+
+" leave_with() defines:
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-rhs> <call-finalize-func>
+" leave_with() undefines (if it was defined) (*1):
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs>
+"
+" When one of above methods is called at first, it defines (*1):
+"   * {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode}) <call-fallback-func>
+"   * {mode}noremap <expr> <Plug>karakuri.prompt({submode}) <call-prompt-func>
+"
+" *1 : These checks can be omitted when multiple mappings
+"      are defined like the following:
+"
+"        call s:unredo
+"          \.enter_with().mode('n').lhs('g-').rhs('g-')
+"          \.enter_with().mode('n').lhs('g+').rhs('g+')
+"          \.map().mode('n').lhs('-').rhs('g-')
+"          \.map().mode('n').lhs('+').rhs('g+')
+"          \.exec()
+"
+
 
 let s:TYPE_NUMBER = 0
 let s:TYPE_STRING = 1
@@ -49,7 +114,6 @@ let s:SIDP = s:SID()
 function! s:method(obj_name, method_name) abort
   let a:scope[a:obj_name][a:method_name] = function('<SNR>' . s:SIDP . '_' . a:obj_name . '_' . a:method_name)
 endfunction
-
 
 
 " kana/vim-submode compatible interface:
@@ -396,68 +460,6 @@ call s:method(s:, 'Map', 'exec')
 
 
 finish
-
-" Simplified processes:
-"
-" 1. {enter-with-lhs}
-" 2. <Plug>karakuri.enter_with_rhs({submode})
-" 3. <Plug>karakuri.init({submode})
-" 4. <Plug>karakuri.in({submode})
-"   4.1. timeout -> Go to "5. <call-fallback-func>"
-"   4.2. User types a key {map-lhs}
-"     4.2.1. <Plug>karakuri.in({submode}){map-lhs} is defined:
-"       4.2.1.1. {map-lhs} is <leave-with-keyseqs> -> Go to "6. Finalization"
-"       4.2.1.2. {map-lhs} is not <leave-with-keyseqs>
-"         4.2.1.2.1. <Plug>karakuri.map_rhs({submode})
-"         4.2.1.2.2. <Plug>karakuri.prompt({submode})
-"         4.2.1.2.3. Go to "4. <Plug>karakuri.in({submode})"
-"     4.2.2. <Plug>karakuri.in({submode}){map-lhs} is NOT defined:
-"       4.2.2.1. Go to "5. <call-fallback-func>"
-" 5. <call-fallback-func>
-"   5.1. getchar(1) is true ({map-lhs} was typed but not matched)
-"     5.1.1. 'keep_leaving_key' is false -> getchar(0)
-"     5.1.2. 'inherit' is true -> feedkeys("\<Plug>karakuri.in(winsize)", 'm')
-"     5.1.3. Go to "6. Finalization"
-"   5.2. getchar(1) is false (timeout)
-"     5.2.1. Go to "6. Finalization"
-" 6. Finalization
-"   6.1. <call-finalize-func>
-"   6.2.  Go to parent mode.
-
-" Mapping definitions:
-"
-" enter_with() defines:
-"   * {mode}map {enter-with-lhs} <Plug>karakuri.enter_with_rhs({submode})<Plug>karakuri.init({submode})<Plug>karakuri.in({submode})
-"   * {mode}{nore}map {options} <Plug>karakuri.enter_with_rhs({submode}) {enter-with-rhs}
-" If leave_with() is not called yet (*1):
-"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<Esc> <call-finalize-func>
-"
-" map() defines:
-"   * {mode}map <Plug>karakuri.in({submode}){map-lhs} <Plug>karakuri.map_rhs({submode})<Plug>karakuri.prompt({submode})<Plug>karakuri.in({submode})
-"   * {mode}{nore}map {options} <Plug>karakuri.map_rhs({submode}) {map-rhs}
-" If leave_with() is not called yet (*1):
-"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs> <call-finalize-func>
-
-" leave_with() defines:
-"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-rhs> <call-finalize-func>
-" leave_with() undefines (if it was defined) (*1):
-"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs>
-"
-" When one of above methods is called at first, it defines (*1):
-"   * {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
-"   * {mode}noremap <expr> <Plug>karakuri.in({submode}) <call-fallback-func>
-"   * {mode}noremap <expr> <Plug>karakuri.prompt({submode}) <call-prompt-func>
-"
-" *1 : These checks can be omitted when multiple mappings
-"      are defined like the following:
-"
-"        call s:unredo
-"          \.enter_with().mode('n').lhs('g-').rhs('g-')
-"          \.enter_with().mode('n').lhs('g+').rhs('g+')
-"          \.map().mode('n').lhs('-').rhs('g-')
-"          \.map().mode('n').lhs('+').rhs('g+')
-"          \.exec()
-"
 
 
 
