@@ -154,8 +154,19 @@ function! karakuri#restore_options() abort
 endfunction
 
 function! karakuri#enter_with(submode, modes, options, lhs, ...) abort
+  call s:validate(a:submode, a:submode, s:TYPE_STRING)
+  call s:validate(a:submode, a:modes, s:TYPE_STRING)
+  call s:validate(a:submode, a:options, s:TYPE_STRING)
+  call s:validate(a:submode, a:lhs, s:TYPE_STRING)
+  if a:0
+    call s:validate(a:submode, a:1, s:TYPE_STRING)
+  endif
+
   let builder = karakuri#builder(a:submode).enter_with()
-  let builder = builder.mode(a:modes).option(a:options).lhs(a:lhs)
+  let builder = builder.mode(a:modes).lhs(a:lhs)
+  if a:options !=# ''
+    let builder = s:Builder_parse_options(builder, a:options)
+  endif
   if a:0
     let builder = builder.rhs(a:1)
   endif
@@ -163,20 +174,45 @@ function! karakuri#enter_with(submode, modes, options, lhs, ...) abort
 endfunction
 
 function! karakuri#leave_with(submode, modes, options, lhs) abort
+  call s:validate(a:submode, a:submode, s:TYPE_STRING)
+  call s:validate(a:submode, a:modes, s:TYPE_STRING)
+  call s:validate(a:submode, a:options, s:TYPE_STRING)
+  call s:validate(a:submode, a:lhs, s:TYPE_STRING)
+
   let builder = karakuri#builder(a:submode).leave_with()
-  let builder = builder.mode(a:modes).option(a:options).lhs(a:lhs)
+  let builder = builder.mode(a:modes).lhs(a:lhs)
+  if a:options !=# ''
+    let builder = s:Builder_parse_options(builder, a:options)
+  endif
   call builder.exec()
 endfunction
 
 function! karakuri#map(submode, modes, options, lhs, rhs) abort
+  call s:validate(a:submode, a:submode, s:TYPE_STRING)
+  call s:validate(a:submode, a:modes, s:TYPE_STRING)
+  call s:validate(a:submode, a:options, s:TYPE_STRING)
+  call s:validate(a:submode, a:lhs, s:TYPE_STRING)
+  call s:validate(a:submode, a:rhs, s:TYPE_STRING)
+
   let builder = karakuri#builder(a:submode).map()
-  let builder = builder.mode(a:modes).option(a:options).lhs(a:lhs).rhs(a:rhs)
+  let builder = builder.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
+  if a:options !=# ''
+    let builder = s:Builder_parse_options(builder, a:options)
+  endif
   call builder.exec()
 endfunction
 
 function! karakuri#unmap(submode, modes, options, lhs) abort
+  call s:validate(a:submode, a:submode, s:TYPE_STRING)
+  call s:validate(a:submode, a:modes, s:TYPE_STRING)
+  call s:validate(a:submode, a:options, s:TYPE_STRING)
+  call s:validate(a:submode, a:lhs, s:TYPE_STRING)
+
   let builder = karakuri#builder(a:submode).unmap()
-  let builder = builder.mode(a:modes).option(a:options).lhs(a:lhs).rhs(a:rhs)
+  let builder = builder.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
+  if a:options !=# ''
+    let builder = s:Builder_parse_options(builder, a:options)
+  endif
   call builder.exec()
 endfunction
 
@@ -218,6 +254,7 @@ let s:MAP_UI_DEFAULT_OPTIONS = {
 \ 'noremap': 1,
 \ 'expr': 0,
 \ 'buffer': 0,
+\ 'unique': 0,
 \ 'nowait': 0,
 \ 'timeout': 1,
 \ 'timeoutlen': 1000,
@@ -232,6 +269,29 @@ function! s:Builder_new(submode) abort
   let builder = deepcopy(s:Builder)
   let builder._submode = a:submode
   let builder._env = []
+  return builder
+endfunction
+
+function! s:Builder_parse_options(builder, options) abort
+  let builder = a:builder
+  if a:options =~# 'b'
+    let builder = builder.buffer(1)
+  endif
+  if a:options =~# 'e'
+    let builder = builder.expr(1)
+  endif
+  if a:options =~# 'r'
+    let builder = builder.noremap(0)
+  endif
+  if a:options =~# 's'
+    let builder = builder.silent(1)
+  endif
+  if a:options =~# 'u'
+    let builder = builder.unique(1)
+  endif
+  if a:options =~# 'x'
+    let builder = builder.keep_leaving_key(1)
+  endif
   return builder
 endfunction
 
@@ -278,6 +338,7 @@ call s:method(s:, 'Builder', 'unmap')
 "     * Map.noremap(b : Bool) : Map
 "     * Map.expr(b : Bool) : Map
 "     * Map.buffer(b : Bool) : Map
+"     * Map.unique(b : Bool) : Map
 "     * Map.nowait(b : Bool) : Map
 "
 "     * Map.timeout(b : Bool) : Map
@@ -385,6 +446,12 @@ function! s:Map_buffer(b) abort dict
 endfunction
 call s:method(s:, 'Map', 'buffer')
 
+function! s:Map_unique(b) abort dict
+  let self._map.unique = !!a:b
+  return self
+endfunction
+call s:method(s:, 'Map', 'unique')
+
 function! s:Map_nowait(b) abort dict
   let self._map.nowait = !!a:b
   return self
@@ -447,6 +514,9 @@ function! s:Map_exec() abort dict
   endif
   if s:Map_get(self, 'buffer')
     let args += ['<buffer>']
+  endif
+  if s:Map_get(self, 'unique')
+    let args += ['<unique>']
   endif
   if s:Map_get(self, 'nowait')
     let args += ['<nowait>']
