@@ -124,6 +124,24 @@ function! s:method(scope, obj_name, method_name) abort
   let a:scope[a:obj_name][a:method_name] = function('<SNR>' . s:SIDP . '_' . a:obj_name . '_' . a:method_name)
 endfunction
 
+function! s:get_option(submode, global, local, name) abort
+  return has_key(a:local, a:name) ? a:local[a:name] :
+  \       has_key(a:global, a:name) ? a:global[a:name] :
+  \       has_key(s:MAP_UI_DEFAULT_OPTIONS, a:name) ? s:MAP_UI_DEFAULT_OPTIONS[a:name] :
+  \       s:throw(a:submode, "Required key '" . a:name . "' was not given.")
+endfunction
+
+function! s:create_map(args) abort
+  execute a:args.mode . a:args.mapcmd
+  \       a:args.options
+  \       a:args.lhs
+  \       a:args.rhs
+endfunction
+
+function! s:create_unmap(args) abort
+  execute a:args.mode . 'unmap' a:args.lhs
+endfunction
+
 
 " kana/vim-submode compatible interface:
 "
@@ -245,7 +263,12 @@ endfunction
 "
 "   Properties:
 "     * _submode : String = submode
-"     * _env : List[Map] = [ <_map> ... ]
+"     * _env : List[Map] = [ <MapEnv> ... ]
+"       * <MapEnv> : All merged properties of (conflict must NOT be occurred):
+"         * { map_type: <map_type> }
+"           * <map_type> : String = One of 'enter_with', 'leave_with', 'map', 'unmap'
+"         * Map._map
+"         * Map._local
 "     * _global : Dictionary[String,Any] = { <option properties> ... }
 "
 "   Methods:
@@ -294,10 +317,13 @@ endfunction
 
 function! s:Builder__push_map(this, map, map_type) abort
   if has_key(a:map, '_map')
-    let map = extend(copy(a:map._map), {'map_type': a:map_type}, 'error')
-    let a:this._env += [map]
+    let mapenv = {'map_type': a:map_type}
+    let mapenv = extend(mapenv, deepcopy(a:map._map), 'error')
+    let mapenv = extend(mapenv, deepcopy(a:map._local), 'error')
+    let a:this._env += [mapenv]
   endif
   let a:map._map = {}
+  let a:map._local = {}
 endfunction
 
 
@@ -353,8 +379,7 @@ call s:method(s:, 'Builder', 'always_show_submode')
 "
 "   Properties:
 "     * _builder : Builder =  Builder object
-"     * _map : Dictionary[String,Any] = { map_type: <map_type>, <map properties> ... }
-"       * <map_type> : String = One of 'enter_with', 'leave_with', 'map', 'unmap'
+"     * _map : Dictionary[String,Any] = { <map properties> ... }
 "       * 'modes'
 "       * 'lhs'
 "       * 'rhs'
@@ -390,13 +415,10 @@ call s:method(s:, 'Builder', 'always_show_submode')
 "     * Option methods:
 "       * Map.timeout(b : Bool) : Map
 "         * Local to map
-"         * TODO: Currently it's implemented as global option
 "       * Map.timeoutlen(msec : Number) : Map
 "         * Local to map
-"         * TODO: Currently it's implemented as global option
 "       * Map.showmode(b : Bool) : Map
 "         * Local to map
-"         * TODO: Currently it's implemented as global option
 "
 
 function! s:Map__new(builder, init) abort
@@ -430,22 +452,23 @@ function! s:Map__parse_options(map, options) abort
   return map
 endfunction
 
-function! s:Map__get(this, map, key) abort
-  return has_key(a:map, a:key) ? a:map[a:key] :
-  \       has_key(s:MAP_UI_DEFAULT_OPTIONS, a:key) ? s:MAP_UI_DEFAULT_OPTIONS[a:key] :
-  \       s:throw(a:this._builder._submode, "Required key '" . a:key . "' was not given.")
+function! s:Map__get_option(this, mapenv, name) abort
+  return s:get_option(
+  \         a:this._builder._submode,
+  \         a:this._builder._global,
+  \         a:mapenv,
+  \         a:name)
 endfunction
 
-
-function! s:Map__create_mappings_of_enter_with(this, submode, map) abort
-  let modes = s:Map__get(a:this, a:map, 'modes')
-  let noremap = s:Map__get(a:this, a:map, 'noremap')
-  let options = s:Map__options_dict2str(a:this, a:map)
-  let lhs = s:Map__get(a:this, a:map, 'lhs')
-  let rhs = s:Map__get(a:this, a:map, 'rhs')
+function! s:Map__create_mappings_of_enter_with(this, submode, mapenv) abort
+  let modes = s:Map__get_option(a:this, a:mapenv, 'modes')
+  let noremap = s:Map__get_option(a:this, a:mapenv, 'noremap')
+  let options = s:Map__options_dict2str(a:this, a:mapenv)
+  let lhs = s:Map__get_option(a:this, a:mapenv, 'lhs')
+  let rhs = s:Map__get_option(a:this, a:mapenv, 'rhs')
   for mode in split(modes, '\zs')
     " {enter-with-lhs}
-    call s:Map__create_map(a:this, {
+    call s:create_map({
     \ 'mode': mode,
     \ 'mapcmd': 'map',
     \ 'options': '',
@@ -456,7 +479,7 @@ function! s:Map__create_mappings_of_enter_with(this, submode, map) abort
     \               a:submode, a:submode, a:submode)
     \})
     " <Plug>karakuri.enter_with_rhs({submode})
-    call s:Map__create_map(a:this, {
+    call s:create_map({
     \ 'mode': mode,
     \ 'mapcmd': (noremap ? 'noremap' : 'map'),
     \ 'options': options,
@@ -468,14 +491,14 @@ function! s:Map__create_mappings_of_enter_with(this, submode, map) abort
   endfor
 endfunction
 
-function! s:Map__create_mappings_of_leave_with(this, submode, map) abort
-  let modes = s:Map__get(a:this, a:map, 'modes')
-  let noremap = s:Map__get(a:this, a:map, 'noremap')
-  let options = s:Map__options_dict2str(a:this, a:map)
-  let lhs = s:Map__get(a:this, a:map, 'lhs')
+function! s:Map__create_mappings_of_leave_with(this, submode, mapenv) abort
+  let modes = s:Map__get_option(a:this, a:mapenv, 'modes')
+  let noremap = s:Map__get_option(a:this, a:mapenv, 'noremap')
+  let options = s:Map__options_dict2str(a:this, a:mapenv)
+  let lhs = s:Map__get_option(a:this, a:mapenv, 'lhs')
   for mode in split(modes, '\zs')
     " <Plug>karakuri.leave_with_keyseqs_exist({submode})
-    call s:Map__create_map(a:this, {
+    call s:create_map({
     \ 'mode': mode,
     \ 'mapcmd': 'noremap',
     \ 'options': '',
@@ -487,15 +510,15 @@ function! s:Map__create_mappings_of_leave_with(this, submode, map) abort
   endfor
 endfunction
 
-function! s:Map__create_mappings_of_map(this, submode, map) abort
-  let modes = s:Map__get(a:this, a:map, 'modes')
-  let noremap = s:Map__get(a:this, a:map, 'noremap')
-  let options = s:Map__options_dict2str(a:this, a:map)
-  let lhs = s:Map__get(a:this, a:map, 'lhs')
-  let rhs = s:Map__get(a:this, a:map, 'rhs')
+function! s:Map__create_mappings_of_map(this, submode, mapenv) abort
+  let modes = s:Map__get_option(a:this, a:mapenv, 'modes')
+  let noremap = s:Map__get_option(a:this, a:mapenv, 'noremap')
+  let options = s:Map__options_dict2str(a:this, a:mapenv)
+  let lhs = s:Map__get_option(a:this, a:mapenv, 'lhs')
+  let rhs = s:Map__get_option(a:this, a:mapenv, 'rhs')
   for mode in split(modes, '\zs')
     " <Plug>karakuri.in({submode}){map-lhs}
-    call s:Map__create_map(a:this, {
+    call s:create_map({
     \ 'mode': mode,
     \ 'mapcmd': 'map',
     \ 'options': '',
@@ -506,7 +529,7 @@ function! s:Map__create_mappings_of_map(this, submode, map) abort
     \               a:submode, a:submode, a:submode)
     \})
     " <Plug>karakuri.map_rhs({submode})
-    call s:Map__create_map(a:this, {
+    call s:create_map({
     \ 'mode': mode,
     \ 'mapcmd': (noremap ? 'noremap' : 'map'),
     \ 'options': options,
@@ -525,7 +548,7 @@ endfunction
 " <Plug>karakuri.init({submode})
 " TODO: Early return if options are not changed
 function! s:Map__update_init_mapping(this, mode) abort
-  call s:Map__create_map(a:this, {
+  call s:create_map({
   \ 'modes': a:mode,
   \ 'mapcmd': 'noremap',
   \ 'options': '<expr>',
@@ -536,35 +559,24 @@ function! s:Map__update_init_mapping(this, mode) abort
   \})
 endfunction
 
-function! s:Map__options_dict2str(this, map) abort
+function! s:Map__options_dict2str(this, mapenv) abort
   let str = ''
-  if s:Map__get(a:this, a:map, 'silent')
+  if s:Map__get_option(a:this, a:mapenv, 'silent')
     let str .= '<silent>'
   endif
-  if s:Map__get(a:this, a:map, 'expr')
+  if s:Map__get_option(a:this, a:mapenv, 'expr')
     let str .= '<expr>'
   endif
-  if s:Map__get(a:this, a:map, 'buffer')
+  if s:Map__get_option(a:this, a:mapenv, 'buffer')
     let str .= '<buffer>'
   endif
-  if s:Map__get(a:this, a:map, 'unique')
+  if s:Map__get_option(a:this, a:mapenv, 'unique')
     let str .= '<unique>'
   endif
-  if s:Map__get(a:this, a:map, 'nowait')
+  if s:Map__get_option(a:this, a:mapenv, 'nowait')
     let str .= '<nowait>'
   endif
   return str
-endfunction
-
-function! s:Map__create_map(this, args) abort
-  execute a:args.mode . a:args.mapcmd
-  \       a:args.options
-  \       a:args.lhs
-  \       a:args.rhs
-endfunction
-
-function! s:Map__create_unmap(this, args) abort
-  execute a:args.mode . 'unmap' a:args.lhs
 endfunction
 
 
@@ -656,24 +668,25 @@ endfunction
 call s:method(s:, 'Map', 'nowait')
 
 function! s:Map_timeout(b) abort dict
-  " TODO
+  let self._local.timeout = !!a:b
   return self
 endfunction
 call s:method(s:, 'Map', 'timeout')
 
 function! s:Map_timeoutlen(msec) abort dict
-  " TODO
+  let self._local.timeoutlen = a:msec
   return self
 endfunction
 call s:method(s:, 'Map', 'timeoutlen')
 
 function! s:Map_showmode(b) abort dict
-  " TODO
+  let self._local.showmode = !!a:b
   return self
 endfunction
 call s:method(s:, 'Map', 'showmode')
 
 function! s:Map_exec() abort dict
+  " TODO: Apply 'timeout', 'timeoutlen', 'showmode'
   for map in self._builder._env
     call s:Map__create_mappings_of_{map.map_type}(self, self._submode, map)
   endfor
@@ -691,7 +704,7 @@ function! s:on_entering_submode(submode, options) " abort
     endfor
 
     " <Plug>karakuri.in({submode})
-    call s:Map__create_map(a:this, {
+    call s:create_map({
     \ 'modes': a:mode,
     \ 'mapcmd': 'noremap',
     \ 'options': '<expr>',
@@ -700,7 +713,7 @@ function! s:on_entering_submode(submode, options) " abort
     \})
 
     " <Plug>karakuri.prompt({submode})
-    call s:Map__create_map(a:this, {
+    call s:create_map({
     \ 'modes': a:mode,
     \ 'mapcmd': 'noremap',
     \ 'options': '<expr>',
@@ -719,10 +732,10 @@ function! s:on_entering_submode(submode, options) " abort
       " TODO: Define {leave-with-lhs} like cons cell
       let leave_lhs_list = [leave_lhs]
     else
-      let leave_lhs_list = s:Map__get(a:this, a:this._map, 'keyseqs_to_leave')
+      let leave_lhs_list = deepcopy(s:MAP_UI_DEFAULT_OPTIONS.keyseqs_to_leave)
     endif
     for leave_lhs in leave_lhs_list
-      call s:Map__create_map(a:this, {
+      call s:create_map({
       \ 'mode': a:mode,
       \ 'mapcmd': 'noremap',
       \ 'options': '<expr>',
