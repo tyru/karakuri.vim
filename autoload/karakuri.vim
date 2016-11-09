@@ -35,26 +35,30 @@ scriptencoding utf-8
 " enter_with() defines:
 "   * {mode}map {enter-with-lhs} <Plug>karakuri.enter_with_rhs({submode})<Plug>karakuri.init({submode})<Plug>karakuri.in({submode})
 "   * {mode}{nore}map {options} <Plug>karakuri.enter_with_rhs({submode}) {enter-with-rhs}
-" If leave_with() is not called yet (*1):
-"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<Esc> <call-finalize-func>
+" If '<Plug>karakuri.leave_with_keyseqs_exist({submode})' was NOT defined (*1):
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<default-keyseqs-to-leave> <call-finalize-func>
 "
 " map() defines:
 "   * {mode}map <Plug>karakuri.in({submode}){map-lhs} <Plug>karakuri.map_rhs({submode})<Plug>karakuri.prompt({submode})<Plug>karakuri.in({submode})
 "   * {mode}{nore}map {options} <Plug>karakuri.map_rhs({submode}) {map-rhs}
-" If leave_with() is not called yet (*1):
-"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs> <call-finalize-func>
+" If '<Plug>karakuri.leave_with_keyseqs_exist({submode})' was NOT defined (*1):
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<default-keyseqs-to-leave> <call-finalize-func>
 
 " leave_with() defines:
-"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-rhs> <call-finalize-func>
+"   * {mode}{nore}map <expr> <Plug>karakuri.in({submode})<leave-with-lhs> <call-finalize-func>
+"   * {mode}noremap <Plug>karakuri.leave_with_keyseqs_exist({submode}) {dummy}
 " leave_with() undefines (if it was defined) (*1):
-"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<leave-with-keyseqs>
+"   * {mode}noremap <expr> <Plug>karakuri.in({submode})<default-keyseqs-to-leave>
 "
 " When one of above methods is called at first, it defines (*1):
 "   * {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
 "   * {mode}noremap <expr> <Plug>karakuri.in({submode}) <call-fallback-func>
 "   * {mode}noremap <expr> <Plug>karakuri.prompt({submode}) <call-prompt-func>
 "
-" *1 : These checks can be omitted when multiple mappings
+" unmap() *undefines*:
+"   * TODO
+"
+" *1 : (TODO) These checks can be omitted when multiple mappings
 "      are defined like the following:
 "
 "        call s:unredo
@@ -65,6 +69,19 @@ scriptencoding utf-8
 "          \.exec()
 "
 
+"
+" Variables
+"
+
+" Key: {submode}, Value: saved old values in <call-init-func>.
+let s:saved_options = {}
+" Key: {submode}, Value: List of String that holds local values in submode.
+" The values are set by Builder via Map.timeout(), and so on.
+let s:local_options = {}
+
+"
+" Utilities
+"
 
 let s:TYPE_NUMBER = 0
 let s:TYPE_STRING = 1
@@ -79,17 +96,17 @@ if v:version >== 800
   let s:TYPE_CHANNEL = 9
 endif
 let s:TYPE_OF = []
-let s:TYPE_OF[0] = 'Number'
-let s:TYPE_OF[1] = 'String'
-let s:TYPE_OF[2] = 'Funcref'
-let s:TYPE_OF[3] = 'List'
-let s:TYPE_OF[4] = 'Dictionary'
-let s:TYPE_OF[5] = 'Float'
+let s:TYPE_OF[s:TYPE_NUMBER] = 'Number'
+let s:TYPE_OF[s:TYPE_STRING] = 'String'
+let s:TYPE_OF[s:TYPE_FUNCREF] = 'Funcref'
+let s:TYPE_OF[s:TYPE_LIST] = 'List'
+let s:TYPE_OF[s:TYPE_DICT] = 'Dictionary'
+let s:TYPE_OF[s:TYPE_FLOAT] = 'Float'
 if v:version >== 800
-  let s:TYPE_OF[6] = 'Boolean'
-  let s:TYPE_OF[7] = 'None'
-  let s:TYPE_OF[8] = 'Job'
-  let s:TYPE_OF[9] = 'Channel'
+  let s:TYPE_OF[s:TYPE_BOOLEAN] = 'Boolean'
+  let s:TYPE_OF[s:TYPE_NONE] = 'None'
+  let s:TYPE_OF[s:TYPE_JOB] = 'Job'
+  let s:TYPE_OF[s:TYPE_CHANNEL] = 'Channel'
 endif
 
 function! s:validate(submode, value, type) abort
@@ -111,7 +128,7 @@ function! s:SID() abort
 endfunction
 let s:SIDP = s:SID()
 
-function! s:method(obj_name, method_name) abort
+function! s:method(scope, obj_name, method_name) abort
   let a:scope[a:obj_name][a:method_name] = function('<SNR>' . s:SIDP . '_' . a:obj_name . '_' . a:method_name)
 endfunction
 
@@ -162,15 +179,15 @@ function! karakuri#enter_with(submode, modes, options, lhs, ...) abort
     call s:validate(a:submode, a:1, s:TYPE_STRING)
   endif
 
-  let builder = karakuri#builder(a:submode).enter_with()
-  let builder = builder.mode(a:modes).lhs(a:lhs)
+  let map = karakuri#builder(a:submode).enter_with()
+  let map = map.mode(a:modes).lhs(a:lhs)
   if a:options !=# ''
-    let builder = s:Builder_parse_options(builder, a:options)
+    let map = s:Map__parse_options(map, a:options)
   endif
   if a:0
-    let builder = builder.rhs(a:1)
+    let map = map.rhs(a:1)
   endif
-  call builder.exec()
+  call map.exec()
 endfunction
 
 function! karakuri#leave_with(submode, modes, options, lhs) abort
@@ -179,12 +196,12 @@ function! karakuri#leave_with(submode, modes, options, lhs) abort
   call s:validate(a:submode, a:options, s:TYPE_STRING)
   call s:validate(a:submode, a:lhs, s:TYPE_STRING)
 
-  let builder = karakuri#builder(a:submode).leave_with()
-  let builder = builder.mode(a:modes).lhs(a:lhs)
+  let map = karakuri#builder(a:submode).leave_with()
+  let map = map.mode(a:modes).lhs(a:lhs)
   if a:options !=# ''
-    let builder = s:Builder_parse_options(builder, a:options)
+    let map = s:Map__parse_options(map, a:options)
   endif
-  call builder.exec()
+  call map.exec()
 endfunction
 
 function! karakuri#map(submode, modes, options, lhs, rhs) abort
@@ -194,12 +211,12 @@ function! karakuri#map(submode, modes, options, lhs, rhs) abort
   call s:validate(a:submode, a:lhs, s:TYPE_STRING)
   call s:validate(a:submode, a:rhs, s:TYPE_STRING)
 
-  let builder = karakuri#builder(a:submode).map()
-  let builder = builder.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
+  let map = karakuri#builder(a:submode).map()
+  let map = map.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
   if a:options !=# ''
-    let builder = s:Builder_parse_options(builder, a:options)
+    let map = s:Map__parse_options(map, a:options)
   endif
-  call builder.exec()
+  call map.exec()
 endfunction
 
 function! karakuri#unmap(submode, modes, options, lhs) abort
@@ -208,12 +225,12 @@ function! karakuri#unmap(submode, modes, options, lhs) abort
   call s:validate(a:submode, a:options, s:TYPE_STRING)
   call s:validate(a:submode, a:lhs, s:TYPE_STRING)
 
-  let builder = karakuri#builder(a:submode).unmap()
-  let builder = builder.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
+  let map = karakuri#builder(a:submode).unmap()
+  let map = map.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
   if a:options !=# ''
-    let builder = s:Builder_parse_options(builder, a:options)
+    let map = s:Map__parse_options(map, a:options)
   endif
-  call builder.exec()
+  call map.exec()
 endfunction
 
 
@@ -226,7 +243,7 @@ function! karakuri#builder(submode) abort
   if a:submode ==# ''
     call s:throw('', 'Submode cannot be empty.')
   endif
-  return s:Builder_new(a:submode)
+  return s:Builder__new(a:submode)
 endfunction
 
 
@@ -235,8 +252,9 @@ endfunction
 "   karakuri#builder() returns this object.
 "
 "   Properties:
-"     * _submode: submode
-"     * _env: [<_map> ...]
+"     * _submode : String = submode
+"     * _env : List[Map] = [<_map> ...]
+"     * _options : Dictionary[String,Any] = {map_type: <map_type>, <same property keys as method names> ...}
 "
 "   Methods:
 "     * Builder.enter_with() : EnterWith
@@ -247,6 +265,27 @@ endfunction
 "         Mapper is a Map
 "     * Builder.unmap() : Unmapper
 "         Unmapper is a Map
+"
+"     * Builder.timeout(b : Bool) : Builder
+"       * Local to map
+"       * TODO: Currently it's implemented as global option.
+"         Move to Map class
+"     * Builder.timeoutlen(msec : Number) : Builder
+"       * Local to map
+"       * TODO: Currently it's implemented as global option.
+"         Move to Map class
+"     * Builder.showmode(b : Bool) : Builder
+"       * Local to map
+"       * TODO: Currently it's implemented as global option.
+"         Move to Map class
+"     * Builder.inherit(b : Bool) : Builder
+"       * Global
+"     * Builder.keep_leaving_key(b : Bool) : Builder
+"       * Global
+"     * Builder.keyseqs_to_leave(keyseqs : List[String]) : Builder
+"       * Global
+"     * Builder.always_show_submode(b : Bool) : Builder
+"       * Global
 "
 
 let s:MAP_UI_DEFAULT_OPTIONS = {
@@ -265,65 +304,95 @@ let s:MAP_UI_DEFAULT_OPTIONS = {
 \ 'always_show_submode': 0
 \}
 
-function! s:Builder_new(submode) abort
+function! s:Builder__new(submode) abort
   let builder = deepcopy(s:Builder)
   let builder._submode = a:submode
   let builder._env = []
+  let builder._options = {}
   return builder
 endfunction
 
-function! s:Builder_parse_options(builder, options) abort
-  let builder = a:builder
-  if a:options =~# 'b'
-    let builder = builder.buffer(1)
+function! s:Builder__push_map(this, map, map_type) abort
+  if has_key(a:map, '_map')
+    let map = extend(copy(a:map._map), {'map_type': a:map_type}, 'error')
+    let a:this._env += [map]
   endif
-  if a:options =~# 'e'
-    let builder = builder.expr(1)
-  endif
-  if a:options =~# 'r'
-    let builder = builder.noremap(0)
-  endif
-  if a:options =~# 's'
-    let builder = builder.silent(1)
-  endif
-  if a:options =~# 'u'
-    let builder = builder.unique(1)
-  endif
-  if a:options =~# 'x'
-    let builder = builder.keep_leaving_key(1)
-  endif
-  return builder
+  let a:map._map = {}
 endfunction
 
 
 let s:Builder = {}
 
 function! s:Builder_enter_with() abort dict
-  return s:Map_new(self, 'enter_with')
+  return s:Map__new(self, 'enter_with')
 endfunction
 call s:method(s:, 'Builder', 'enter_with')
 
 function! s:Builder_leave_with() abort dict
-  return s:Map_new(self, 'leave_with')
+  return s:Map__new(self, 'leave_with')
 endfunction
 call s:method(s:, 'Builder', 'leave_with')
 
 function! s:Builder_map() abort dict
-  return s:Map_new(self, 'map')
+  return s:Map__new(self, 'map')
 endfunction
 call s:method(s:, 'Builder', 'map')
 
 function! s:Builder_unmap() abort dict
-  return s:Map_new(self, 'unmap')
+  return s:Map__new(self, 'unmap')
 endfunction
 call s:method(s:, 'Builder', 'unmap')
+
+function! s:Builder_timeout(b) abort dict
+  let self._options.timeout = !!a:b
+endfunction
+call s:method(s:, 'Builder', 'timeout')
+
+function! s:Builder_timeoutlen(msec) abort dict
+  call s:validate(self._submode, a:msec, s:TYPE_NUMBER)
+  let self._options.timeoutlen = !!a:b
+  return self
+endfunction
+call s:method(s:, 'Builder', 'timeoutlen')
+
+function! s:Builder_showmode(b) abort dict
+  let self._options.showmode = !!a:b
+  return self
+endfunction
+call s:method(s:, 'Builder', 'showmode')
+
+function! s:Builder_inherit(b) abort dict
+  let self._options.inherit = !!a:b
+  return self
+endfunction
+call s:method(s:, 'Builder', 'inherit')
+
+function! s:Builder_keep_leaving_key(b) abort dict
+  let self._options.keep_leaving_key = !!a:b
+  return self
+endfunction
+call s:method(s:, 'Builder', 'keep_leaving_key')
+
+function! s:Builder_keyseqs_to_leave(keyseqs) abort dict
+  call s:validate(self._submode, a:keyseqs, s:TYPE_LIST)
+  let self._options.keyseqs_to_leave = a:keyseqs
+  return self
+endfunction
+call s:method(s:, 'Builder', 'keyseqs_to_leave')
+
+function! s:Builder_always_show_submode(b) abort dict
+  let self._options.always_show_submode = !!a:b
+  return self
+endfunction
+call s:method(s:, 'Builder', 'always_show_submode')
 
 
 " Map:
 "
 "   Properties:
-"     * _builder: Builder object
-"     * _map: {<same property keys as method names> ...}
+"     * _builder : Builder =  Builder object
+"     * _map : Dictionary[String,Any] = {map_type: <map_type>, <same property keys as method names> ...}
+"       * map_type : String = One of 'enter_with', 'leave_with', 'map', 'unmap'
 "
 "   Methods:
 "     * Map.enter_with() : EnterWith
@@ -341,18 +410,29 @@ call s:method(s:, 'Builder', 'unmap')
 "     * Map.unique(b : Bool) : Map
 "     * Map.nowait(b : Bool) : Map
 "
-"     * Map.timeout(b : Bool) : Map
-"     * Map.timeoutlen(msec : Number) : Map
-"     * Map.showmode(b : Bool) : Map
-"     * Map.inherit(b : Bool) : Map
-"     * Map.keep_leaving_key(b : Bool) : Map
-"     * Map.keyseqs_to_leave(keyseqs : List) : Map
-"     * Map.always_show_submode(b : Bool) : Map
-"
 "     * Map.exec() : Unit
 "
+"     * Option methods:
+"       * Map.timeout(b : Bool) : Map
+"         * Local to map
+"         * TODO: Currently it's implemented as global option
+"       * Map.timeoutlen(msec : Number) : Map
+"         * Local to map
+"         * TODO: Currently it's implemented as global option
+"       * Map.showmode(b : Bool) : Map
+"         * Local to map
+"         * TODO: Currently it's implemented as global option
+"       * Map.inherit(b : Bool) : Map
+"         * Global
+"       * Map.keep_leaving_key(b : Bool) : Map
+"         * Global
+"       * Map.keyseqs_to_leave(keyseqs : List[String]) : Map
+"         * Global
+"       * Map.always_show_submode(b : Bool) : Map
+"         * Global
+"
 
-function! s:Map_new(builder, init) abort
+function! s:Map__new(builder, init) abort
   let map = deepcopy(s:Map)
   let map._builder = a:builder
   " 'map[a:init]' method checks if '_map' key exists.
@@ -360,40 +440,260 @@ function! s:Map_new(builder, init) abort
   return map[a:init]()
 endfunction
 
-function! s:Map_push_map(this) abort
-  if has_key(a:this, '_map')
-    let a:this._builder._env += [a:this._map]
+function! s:Map__parse_options(map, options) abort
+  let map = a:map
+  if a:options =~# 'b'
+    let map = map.buffer(1)
   endif
-  let a:this._map = {}
-  return a:this
+  if a:options =~# 'e'
+    let map = map.expr(1)
+  endif
+  if a:options =~# 'r'
+    let map = map.noremap(0)
+  endif
+  if a:options =~# 's'
+    let map = map.silent(1)
+  endif
+  if a:options =~# 'u'
+    let map = map.unique(1)
+  endif
+  if a:options =~# 'x'
+    let map = map.keep_leaving_key(1)
+  endif
+  return map
 endfunction
 
-function! s:Map_get(this, key) abort
-  return has_key(a:this._map, a:key) ? a:this._map[a:key] :
+function! s:Map__get(this, map, key) abort
+  return has_key(a:map, a:key) ? a:map[a:key] :
   \       has_key(s:MAP_UI_DEFAULT_OPTIONS, a:key) ? s:MAP_UI_DEFAULT_OPTIONS[a:key] :
   \       s:throw(a:this._builder._submode, "Required key '" . a:key . "' was not given.")
+endfunction
+
+function! s:Map__create_base_mappings(this, submode, mode) abort
+  let init_lhs = printf('<Plug>karakuri.init(%s)', a:submode)
+  if maparg(init_lhs, a:mode, 0) !=# ''
+    " Skip if it's defined already
+    return
+  endif
+  " <Plug>karakuri.init({submode})
+  call s:Map__create_map(a:this, {
+  \ 'modes': a:mode,
+  \ 'mapcmd': 'noremap',
+  \ 'options': '<expr>',
+  \ 'lhs': init_lhs
+  \ 'rhs': printf('<SID>on_entering_submode(%s)', string(a:submode))
+  \})
+  " <Plug>karakuri.in({submode})
+  let in_lhs = printf('<Plug>karakuri.in(%s)', a:submode)
+  call s:Map__create_map(a:this, {
+  \ 'modes': a:mode,
+  \ 'mapcmd': 'noremap',
+  \ 'options': '<expr>',
+  \ 'lhs': in_lhs
+  \ 'rhs': printf('<SID>on_fallback_action(%s)', string(a:submode))
+  \})
+  " <Plug>karakuri.prompt({submode})
+  let prompt_lhs = printf('<Plug>karakuri.prompt(%s)', a:submode)
+  call s:Map__create_map(a:this, {
+  \ 'modes': a:mode,
+  \ 'mapcmd': 'noremap',
+  \ 'options': '<expr>',
+  \ 'lhs': prompt_lhs
+  \ 'rhs': printf('<SID>on_prompt_action(%s)', string(a:submode))
+  \})
+endfunction
+
+function! s:Map__create_mappings_of_enter_with(this, submode, map) abort
+  let modes = s:Map__get(a:this, a:map, 'modes')
+  let noremap = s:Map__get(a:this, a:map, 'noremap')
+  let options = s:Map__options_dict2str(a:this, a:map)
+  let lhs = s:Map__get(a:this, a:map, 'lhs')
+  let rhs = s:Map__get(a:this, a:map, 'rhs')
+  let keyseqs_to_leave_list = s:Map__get(a:this, a:map, 'keyseqs_to_leave')
+  for mode in split(modes, '\zs')
+    " <Plug>karakuri.init({submode}), ...
+    call s:Map__create_base_mappings(a:this, a:submode, mode)
+    " {enter-with-lhs}
+    call s:Map__create_map(a:this, {
+    \ 'mode': mode,
+    \ 'mapcmd': 'map',
+    \ 'options': '',
+    \ 'lhs': lhs,
+    \ 'rhs': printf(join(['<Plug>karakuri.enter_with_rhs(%s)',
+    \                     '<Plug>karakuri.init(%s)',
+    \                     '<Plug>karakuri.in(%s)'], ''),
+    \               a:submode, a:submode, a:submode)
+    \})
+    " <Plug>karakuri.enter_with_rhs({submode})
+    call s:Map__create_map(a:this, {
+    \ 'mode': mode,
+    \ 'mapcmd': (noremap ? 'noremap' : 'map'),
+    \ 'options': options,
+    \ 'lhs': printf('<Plug>karakuri.enter_with_rhs(%s)', a:submode),
+    \ 'rhs': rhs
+    \})
+    " <Plug>karakuri.in({submode})<default-keyseqs-to-leave>
+    " (If '<Plug>karakuri.leave_with_keyseqs_exist({submode})' was NOT defined)
+    let leave_with_keyseqs_exist_lhs =
+    \   printf('<Plug>karakuri.leave_with_keyseqs_exist(%s)', a:submode)
+    if maparg(leave_with_keyseqs_exist_lhs, mode, 0) ==# ''
+      for leave_lhs in keyseqs_to_leave_list
+        call s:Map__create_map(a:this, {
+        \ 'mode': mode,
+        \ 'mapcmd': 'noremap',
+        \ 'options': '<expr>',
+        \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, leave_lhs),
+        \ 'rhs': printf('<SID>on_leaving_submode(%s)', string(a:submode))
+        \})
+      endfor
+    endif
+  endfor
+endfunction
+
+function! s:Map__create_mappings_of_leave_with(this, submode, map) abort
+  let modes = s:Map__get(a:this, a:map, 'modes')
+  let noremap = s:Map__get(a:this, a:map, 'noremap')
+  let options = s:Map__options_dict2str(a:this, a:map)
+  let lhs = s:Map__get(a:this, a:map, 'lhs')
+  for mode in split(modes, '\zs')
+    " <Plug>karakuri.init({submode}), ...
+    call s:Map__create_base_mappings(a:this, a:submode, mode)
+    " <Plug>karakuri.in({submode})<leave-with-lhs>
+    call s:Map__create_map(a:this, {
+    \ 'mode': mode,
+    \ 'mapcmd': 'noremap',
+    \ 'options': '<expr>',
+    \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, lhs),
+    \ 'rhs': printf('<SID>on_leaving_submode(%s)', string(a:submode))
+    \})
+    " <Plug>karakuri.in({submode})<default-keyseqs-to-leave>
+    " (*Undefine* if it was defined)
+    let keyseqs_to_leave = s:MAP_UI_DEFAULT_OPTIONS.keyseqs_to_leave[0]
+    let keyseqs_to_leave_lhs = printf('<Plug>karakuri.in(%s)%s',
+    \                                 a:submode, keyseqs_to_leave),
+    if maparg(keyseqs_to_leave_lhs, mode, 0) !=# ''
+      call s:Map__create_unmap(a:this, {
+      \ 'mode': mode,
+      \ 'lhs': keyseqs_to_leave_lhs
+      \})
+    endif
+    " <Plug>karakuri.leave_with_keyseqs_exist({submode})
+    call s:Map__create_map(a:this, {
+    \ 'mode': mode,
+    \ 'mapcmd': 'noremap',
+    \ 'options': '',
+    \ 'lhs': printf('<Plug>karakuri.leave_with_keyseqs_exist(%s)', a:submode),
+    \ 'rhs': '[leave-with-keyseqs-exist]'
+    \})
+  endfor
+endfunction
+
+function! s:Map__create_mappings_of_map(this, submode, map) abort
+  let modes = s:Map__get(a:this, a:map, 'modes')
+  let noremap = s:Map__get(a:this, a:map, 'noremap')
+  let options = s:Map__options_dict2str(a:this, a:map)
+  let lhs = s:Map__get(a:this, a:map, 'lhs')
+  let rhs = s:Map__get(a:this, a:map, 'rhs')
+  let keyseqs_to_leave_list = s:Map__get(a:this, a:map, 'keyseqs_to_leave')
+  for mode in split(modes, '\zs')
+    " <Plug>karakuri.init({submode}), ...
+    call s:Map__create_base_mappings(a:this, a:submode, mode)
+    " <Plug>karakuri.in({submode}){map-lhs}
+    call s:Map__create_map(a:this, {
+    \ 'mode': mode,
+    \ 'mapcmd': 'map',
+    \ 'options': '',
+    \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, lhs)
+    \ 'rhs': printf(join(['<Plug>karakuri.map_rhs(%s)',
+    \                     '<Plug>karakuri.prompt(%s)',
+    \                     '<Plug>karakuri.in(%s)'], ''),
+    \               a:submode, a:submode, a:submode)
+    \})
+    " <Plug>karakuri.map_rhs({submode})
+    call s:Map__create_map(a:this, {
+    \ 'mode': mode,
+    \ 'mapcmd': (noremap ? 'noremap' : 'map'),
+    \ 'options': options,
+    \ 'lhs': printf('<Plug>karakuri.map_rhs(%s)', a:submode),
+    \ 'rhs': rhs
+    \})
+    " <Plug>karakuri.in({submode})<default-keyseqs-to-leave>
+    " (If '<Plug>karakuri.leave_with_keyseqs_exist({submode})' was NOT defined)
+    let leave_with_keyseqs_exist_lhs =
+    \   printf('<Plug>karakuri.leave_with_keyseqs_exist(%s)', a:submode)
+    if maparg(leave_with_keyseqs_exist_lhs, mode, 0) ==# ''
+      for leave_lhs in keyseqs_to_leave_list
+        call s:Map__create_map(a:this, {
+        \ 'mode': mode,
+        \ 'mapcmd': 'noremap',
+        \ 'options': '<expr>',
+        \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, leave_lhs),
+        \ 'rhs': printf('<SID>on_leaving_submode(%s)', string(a:submode))
+        \})
+      endfor
+    endif
+  endfor
+endfunction
+
+function! s:Map__create_mappings_of_unmap(this, submode, map) abort
+  " TODO
+endfunction
+
+function! s:Map__options_dict2str(this, map) abort
+  let str = ''
+  if s:Map__get(a:this, a:map, 'silent')
+    let str .= '<silent>'
+  endif
+  if s:Map__get(a:this, a:map, 'expr')
+    let str .= '<expr>'
+  endif
+  if s:Map__get(a:this, a:map, 'buffer')
+    let str .= '<buffer>'
+  endif
+  if s:Map__get(a:this, a:map, 'unique')
+    let str .= '<unique>'
+  endif
+  if s:Map__get(a:this, a:map, 'nowait')
+    let str .= '<nowait>'
+  endif
+  return str
+endfunction
+
+function! s:Map__create_map(this, args) abort
+  execute a:args.mode . a:args.mapcmd
+  \       a:args.options
+  \       a:args.lhs
+  \       a:args.rhs
+endfunction
+
+function! s:Map__create_unmap(this, args) abort
+  execute a:args.mode . 'unmap' a:args.lhs
 endfunction
 
 
 let s:Map = {}
 
 function! s:Map_enter_with() abort dict
-  return s:Map_push_map(self)
+  call s:Builder__push_map(self._builder, self, 'enter_with')
+  return self
 endfunction
 call s:method(s:, 'Map', 'enter_with')
 
 function! s:Map_leave_with() abort dict
-  return s:Map_push_map(self)
+  call s:Builder__push_map(self._builder, self, 'leave_with')
+  return self
 endfunction
 call s:method(s:, 'Map', 'leave_with')
 
 function! s:Map_map() abort dict
-  return s:Map_push_map(self)
+  call s:Builder__push_map(self._builder, self, 'map')
+  return self
 endfunction
 call s:method(s:, 'Map', 'map')
 
 function! s:Map_unmap() abort dict
-  return s:Map_push_map(self)
+  call s:Builder__push_map(self._builder, self, 'unmap')
+  return self
 endfunction
 call s:method(s:, 'Map', 'unmap')
 
@@ -459,74 +759,106 @@ endfunction
 call s:method(s:, 'Map', 'nowait')
 
 function! s:Map_timeout(b) abort dict
-  let self._map.timeout = !!a:b
+  call self._builder.timeout(a:b)
   return self
 endfunction
 call s:method(s:, 'Map', 'timeout')
 
 function! s:Map_timeoutlen(msec) abort dict
-  call s:validate(self._submode, a:msec, s:TYPE_NUMBER)
-  let self._map.timeoutlen = !!a:b
+  call self._builder.timeoutlen(a:b)
   return self
 endfunction
 call s:method(s:, 'Map', 'timeoutlen')
 
 function! s:Map_showmode(b) abort dict
-  let self._map.showmode = !!a:b
+  call self._builder.showmode(a:b)
   return self
 endfunction
 call s:method(s:, 'Map', 'showmode')
 
 function! s:Map_inherit(b) abort dict
-  let self._map.inherit = !!a:b
+  call self._builder.inherit(a:b)
   return self
 endfunction
 call s:method(s:, 'Map', 'inherit')
 
 function! s:Map_keep_leaving_key(b) abort dict
-  let self._map.keep_leaving_key = !!a:b
+  call self._builder.keep_leaving_key(a:b)
   return self
 endfunction
 call s:method(s:, 'Map', 'keep_leaving_key')
 
 function! s:Map_keyseqs_to_leave(keyseqs) abort dict
-  call s:validate(self._submode, a:keyseqs, s:TYPE_LIST)
-  let self._map.keyseqs_to_leave = a:keyseqs
+  call self._builder.keyseqs_to_leave(a:keyseqs)
   return self
 endfunction
 call s:method(s:, 'Map', 'keyseqs_to_leave')
 
 function! s:Map_always_show_submode(b) abort dict
-  let self._map.always_show_submode = !!a:b
+  call self._builder.always_show_submode(a:b)
   return self
 endfunction
 call s:method(s:, 'Map', 'always_show_submode')
 
 function! s:Map_exec() abort dict
-  let modes = s:Map_get(self, 'modes')
-  let mapcmd = (s:Map_get(self, 'noremap') ? 'noremap' : 'map')
-  let args = []
-  if s:Map_get(self, 'silent')
-    let args += ['<silent>']
-  endif
-  if s:Map_get(self, 'expr')
-    let args += ['<expr>']
-  endif
-  if s:Map_get(self, 'buffer')
-    let args += ['<buffer>']
-  endif
-  if s:Map_get(self, 'unique')
-    let args += ['<unique>']
-  endif
-  if s:Map_get(self, 'nowait')
-    let args += ['<nowait>']
-  endif
-  let args += [s:Map_get(self, 'lhs'), s:Map_get(self, 'rhs')]
-  for mode in split(modes, '\zs')
-    execute join([mode . mapcmd] + args)
+  for map in self._env
+    call s:Map__create_mappings_of_{map.map_type}(self, self._submode, map)
   endfor
 endfunction
 call s:method(s:, 'Map', 'exec')
+
+
+let s:OPTION_NAMES = [
+\ 'timeout',
+\ 'timeoutlen',
+\ 'showmode',
+\ 'inherit',
+\ 'keep_leaving_key',
+\ 'keyseqs_to_leave',
+\ 'always_show_submode'
+\]
+
+" <call-init-func>
+function! s:on_entering_submode(submode, option_names) " abort
+  try
+    let s:saved_options[a:submode] = {}
+    for name in a:option_names
+      let s:saved_options[a:submode][name] = getbufvar('%', '&' . name)
+    endfor
+  finally
+    return ''
+  endtry
+endfunction
+
+" <call-finalize-func>
+function! s:on_leaving_submode(submode) " abort
+  try
+    " TODO
+  finally
+    return ''
+  endtry
+endfunction
+
+" <call-fallback-func>
+function! s:on_fallback_action(submode) " abort
+  try
+    " TODO
+  finally
+    return ''
+  endtry
+endfunction
+
+" <call-prompt-func>
+function! s:on_prompt_action(submode) " abort
+  try
+    redraw
+    echohl ModeMsg
+    echo '-- Submode:' a:submode '--'
+    echohl None
+  finally
+    return ''
+  endtry
+endfunction
 
 
 finish
