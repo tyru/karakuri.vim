@@ -62,16 +62,6 @@ scriptencoding utf-8
 "
 
 "
-" Variables
-"
-
-" Key: {submode}, Value: saved old values in <call-init-func>.
-let s:saved_options = {}
-" Key: {submode}, Value: List of String that holds local values in submode.
-" The values are set by Builder via Map.timeout(), and so on.
-let s:local_options = {}
-
-"
 " Utilities
 "
 
