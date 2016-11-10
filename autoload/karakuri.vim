@@ -20,7 +20,7 @@ scriptencoding utf-8
 " 5. <call-fallback-func>
 "   5.1. getchar(1) is true ({map-lhs} was typed but not matched)
 "     5.1.1. 'keep_leaving_key' is false -> getchar(0)
-"     5.1.2. 'inherit' is true -> feedkeys("\<Plug>karakuri.in(winsize)", 'm')
+"     5.1.2. 'inherit' is true -> feedkeys("\<Plug>karakuri.in({submode})", 'm')
 "     5.1.3. Go to "6. Finalization"
 "   5.2. getchar(1) is false (timeout)
 "     5.2.1. Go to "6. Finalization"
@@ -45,14 +45,14 @@ scriptencoding utf-8
 "     * {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
 
 " leave_with() defines:
-"   * {mode}noremap <Plug>karakuri.leave_with_keyseqs_exist({submode}) {leave-with-lhs}
+"   * {mode}noremap <Plug>karakuri.leave_with_keyseqs({submode}) {leave-with-lhs}
 "   If the global options are updated:
 "     * {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
 "
 " <call-init-func> defines:
 "   * {mode}noremap <expr> <Plug>karakuri.in({submode}) <call-fallback-func>
 "   * {mode}noremap <expr> <Plug>karakuri.prompt({submode}) <call-prompt-func>
-"   If '<Plug>karakuri.leave_with_keyseqs_exist({submode})' was defined:
+"   If '<Plug>karakuri.leave_with_keyseqs({submode})' was defined:
 "     * {mode}{nore}map <expr> <Plug>karakuri.in({submode}){leave-with-lhs} <call-finalize-func>
 "   Else:
 "     * {mode}noremap <expr> <Plug>karakuri.in({submode}){default-keyseqs-to-leave} <call-finalize-func>
@@ -497,13 +497,16 @@ function! s:Map__create_mappings_of_leave_with(this, submode, mapenv) abort
   let options = s:Map__options_dict2str(a:this, a:mapenv)
   let lhs = s:Map__get_option(a:this, a:mapenv, 'lhs')
   for mode in split(modes, '\zs')
-    " <Plug>karakuri.leave_with_keyseqs_exist({submode})
+    " <Plug>karakuri.leave_with_keyseqs({submode})
+    let leave_with_keyseqs = printf('<Plug>karakuri.leave_with_keyseqs(%s)', a:submode)
+    let old_rhs = maparg(leave_with_keyseqs, mode, 0)
+    let rhs_list = old_rhs !=# '' ? eval(old_rhs) : []
     call s:create_map({
     \ 'mode': mode,
     \ 'mapcmd': 'noremap',
     \ 'options': '',
-    \ 'lhs': printf('<Plug>karakuri.leave_with_keyseqs_exist(%s)', a:submode),
-    \ 'rhs': lhs
+    \ 'lhs': leave_with_keyseqs,
+    \ 'rhs': string(rhs_list + [lhs])
     \})
     " <Plug>karakuri.init({submode})
     call s:Map__update_init_mapping(a:this, mode)
@@ -548,14 +551,15 @@ endfunction
 " <Plug>karakuri.init({submode})
 " TODO: Early return if options are not changed
 function! s:Map__update_init_mapping(this, mode) abort
+  let submode = a:this._builder._submode
+  let options = extend(copy(a:this._builder._global), a:this._local)
   call s:create_map({
   \ 'modes': a:mode,
   \ 'mapcmd': 'noremap',
   \ 'options': '<expr>',
-  \ 'lhs': printf('<Plug>karakuri.init(%s)', a:this._builder._submode),
+  \ 'lhs': printf('<Plug>karakuri.init(%s)', submode),
   \ 'rhs': printf('<SID>on_entering_submode(%s, %s)',
-  \               string(a:this._builder._submode),
-  \               string(a:this._builder._global))
+  \               string(submode), string(options))
   \})
 endfunction
 
@@ -704,12 +708,20 @@ function! s:on_entering_submode(submode, options) " abort
     endfor
 
     " <Plug>karakuri.in({submode})
+    let keep_leaving_key =
+    \ get(a:options, 'keep_leaving_key', s:MAP_UI_DEFAULT_OPTIONS.keep_leaving_key)
+    let inherit =
+    \ get(a:options, 'inherit', s:MAP_UI_DEFAULT_OPTIONS.inherit)
     call s:create_map({
     \ 'modes': a:mode,
     \ 'mapcmd': 'noremap',
     \ 'options': '<expr>',
     \ 'lhs': printf('<Plug>karakuri.in(%s)', a:submode),
-    \ 'rhs': printf('<SID>on_fallback_action(%s)', string(a:submode))
+    \ 'rhs': printf('<SID>on_fallback_action(%s,%s,%d,%d)',
+    \               string(a:submode),
+    \               string(saved_options),
+    \               !!keep_leaving_key,
+    \               !!inherit)
     \})
 
     " <Plug>karakuri.prompt({submode})
@@ -721,16 +733,14 @@ function! s:on_entering_submode(submode, options) " abort
     \ 'rhs': printf('<SID>on_prompt_action(%s)', string(a:submode))
     \})
 
-    " If '<Plug>karakuri.leave_with_keyseqs_exist({submode})' was defined:
+    " If '<Plug>karakuri.leave_with_keyseqs({submode})' was defined:
     "   Define <Plug>karakuri.in({submode}){leave-with-lhs}
     " Else:
     "   Define <Plug>karakuri.in({submode}){default-keyseqs-to-leave}
-    let exist_lhs = printf('<Plug>karakuri.leave_with_keyseqs_exist(%s)', a:submode)
+    let exist_lhs = printf('<Plug>karakuri.leave_with_keyseqs(%s)', a:submode)
     let leave_lhs = maparg(exist_lhs, mode, 0)
     if leave_lhs !=# ''
-      " TODO: Support multiple {leave-with-lhs} mappings.
-      " TODO: Define {leave-with-lhs} like cons cell
-      let leave_lhs_list = [leave_lhs]
+      let leave_lhs_list = eval(leave_lhs)
     else
       let leave_lhs_list = deepcopy(s:MAP_UI_DEFAULT_OPTIONS.keyseqs_to_leave)
     endif
@@ -740,7 +750,7 @@ function! s:on_entering_submode(submode, options) " abort
       \ 'mapcmd': 'noremap',
       \ 'options': '<expr>',
       \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, leave_lhs),
-      \ 'rhs': printf('<SID>on_leaving_submode(%s, %s)',
+      \ 'rhs': printf('<SID>on_leaving_submode(%s,%s)',
       \               string(a:submode), string(saved_options))
       \})
     endfor
@@ -763,9 +773,17 @@ function! s:on_leaving_submode(submode, saved_options) " abort
 endfunction
 
 " <call-fallback-func>
-function! s:on_fallback_action(submode) " abort
+function! s:on_fallback_action(submode, saved_options, keep_leaving_key, inherit) " abort
   try
-    " TODO
+    if getchar(1)
+      if !a:keep_leaving_key
+        call getchar(0)
+      endif
+      if a:inherit
+        call feedkeys(printf("\<Plug>karakuri.in(%s)", a:submode), 'm')
+      endif
+    endif
+    call s:on_leaving_submode(a:submode, a:saved_options)
   finally
     return ''
   endtry
