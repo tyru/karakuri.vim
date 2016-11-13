@@ -71,7 +71,7 @@ let s:TYPE_FUNCREF = 2
 let s:TYPE_LIST = 3
 let s:TYPE_DICT = 4
 let s:TYPE_FLOAT = 5
-if v:version >== 800
+if v:version >=# 800
   let s:TYPE_BOOLEAN = 6
   let s:TYPE_NONE = 7
   let s:TYPE_JOB = 8
@@ -84,7 +84,7 @@ let s:TYPE_OF[s:TYPE_FUNCREF] = 'Funcref'
 let s:TYPE_OF[s:TYPE_LIST] = 'List'
 let s:TYPE_OF[s:TYPE_DICT] = 'Dictionary'
 let s:TYPE_OF[s:TYPE_FLOAT] = 'Float'
-if v:version >== 800
+if v:version >=# 800
   let s:TYPE_OF[s:TYPE_BOOLEAN] = 'Boolean'
   let s:TYPE_OF[s:TYPE_NONE] = 'None'
   let s:TYPE_OF[s:TYPE_JOB] = 'Job'
