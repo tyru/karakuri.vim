@@ -4,7 +4,7 @@ scriptencoding utf-8
 " Simplified processes:
 "
 " 1. {enter-with-lhs}
-" 2. <Plug>karakuri.enter_with_rhs({submode})
+" 2. <Plug>karakuri.enter_with_rhs({submode},{enter-with-lhs})
 " 3. <Plug>karakuri.init({submode})
 " 4. <Plug>karakuri.in({submode})
 "   4.1. timeout -> Go to "5. <call-fallback-func>"
@@ -12,7 +12,7 @@ scriptencoding utf-8
 "     4.2.1. <Plug>karakuri.in({submode}){map-lhs} is defined:
 "       4.2.1.1. {map-lhs} is <leave-with-keyseqs> -> Go to "6. Finalization"
 "       4.2.1.2. {map-lhs} is not <leave-with-keyseqs>
-"         4.2.1.2.1. <Plug>karakuri.map_rhs({submode})
+"         4.2.1.2.1. <Plug>karakuri.map_rhs({submode},{map-lhs})
 "         4.2.1.2.2. <Plug>karakuri.prompt({submode})
 "         4.2.1.2.3. Go to "4. <Plug>karakuri.in({submode})"
 "     4.2.2. <Plug>karakuri.in({submode}){map-lhs} is NOT defined:
@@ -33,14 +33,14 @@ scriptencoding utf-8
 " Mapping definitions:
 "
 " enter_with() defines:
-"   * {mode}map {enter-with-lhs} <Plug>karakuri.enter_with_rhs({submode})<Plug>karakuri.init({submode})<Plug>karakuri.in({submode})
-"   * {mode}{nore}map {options} <Plug>karakuri.enter_with_rhs({submode}) {enter-with-rhs}
+"   * {mode}map {enter-with-lhs} <Plug>karakuri.enter_with_rhs({submode},{enter-with-lhs})<Plug>karakuri.init({submode})<Plug>karakuri.in({submode})
+"   * {mode}{nore}map {options} <Plug>karakuri.enter_with_rhs({submode},{enter-with-lhs}) {enter-with-rhs}
 "   If the global options are updated:
 "     * {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
 "
 " map() defines:
-"   * {mode}map <Plug>karakuri.in({submode}){map-lhs} <Plug>karakuri.map_rhs({submode})<Plug>karakuri.prompt({submode})<Plug>karakuri.in({submode})
-"   * {mode}{nore}map {options} <Plug>karakuri.map_rhs({submode}) {map-rhs}
+"   * {mode}map <Plug>karakuri.in({submode}){map-lhs} <Plug>karakuri.map_rhs({submode},{map-lhs})<Plug>karakuri.prompt({submode})<Plug>karakuri.in({submode})
+"   * {mode}{nore}map {options} <Plug>karakuri.map_rhs({submode},{map-lhs}) {map-rhs}
 "   If the global options are updated:
 "     * {mode}noremap <expr> <Plug>karakuri.init({submode}) <call-init-func>
 
@@ -255,8 +255,6 @@ endfunction
 "     * _submode : String = submode
 "     * _env : List[Map] = [ <MapEnv> ... ]
 "       * <MapEnv> : All merged properties of (conflict must NOT be occurred):
-"         * { map_type: <map_type> }
-"           * <map_type> : String = One of 'enter_with', 'leave_with', 'map', 'unmap'
 "         * Map._map
 "         * Map._local
 "     * _global : Dictionary[String,Any] = { <option properties> ... }
@@ -305,13 +303,19 @@ function! s:Builder__new(submode) abort
   return builder
 endfunction
 
-function! s:Builder__push_map(this, map, map_type) abort
+" Push current map to 'Builder._env'
+function! s:Builder__push_map(this, map) abort
   if has_key(a:map, '_map')
-    let mapenv = {'map_type': a:map_type}
-    let mapenv = extend(mapenv, deepcopy(a:map._map), 'error')
-    let mapenv = extend(mapenv, deepcopy(a:map._local), 'error')
+    let mapenv = {'map_type': a:map._map_type}
+    let mapenv = extend(mapenv, a:map._map, 'error')
+    let mapenv = extend(mapenv, a:map._local, 'error')
     let a:this._env += [mapenv]
   endif
+endfunction
+
+" Construct new map
+function! s:Builder__construct(this, map, map_type) abort
+  let a:map._map_type = a:map_type
   let a:map._map = {}
   let a:map._local = {}
 endfunction
@@ -369,6 +373,8 @@ call s:method(s:, 'Builder', 'always_show_submode')
 "
 "   Properties:
 "     * _builder : Builder =  Builder object
+"     * _map_type: <map_type> : String
+"       * One of 'enter_with', 'leave_with', 'map', 'unmap'
 "     * _map : Dictionary[String,Any] = { <map properties> ... }
 "       * 'modes'
 "       * 'lhs'
@@ -411,12 +417,12 @@ call s:method(s:, 'Builder', 'always_show_submode')
 "         * Local to map
 "
 
-function! s:Map__new(builder, init) abort
+function! s:Map__new(builder, map_type) abort
   let map = deepcopy(s:Map)
   let map._builder = a:builder
-  " 'map[a:init]' method checks if '_map' key exists.
+  " 'map[a:map_type]' method checks if '_map' key exists.
   " let map._map = {}
-  return map[a:init]()
+  return map[a:map_type]()
 endfunction
 
 function! s:Map__parse_options(map, options) abort
@@ -463,17 +469,17 @@ function! s:Map__create_mappings_of_enter_with(this, submode, mapenv) abort
     \ 'mapcmd': 'map',
     \ 'options': '',
     \ 'lhs': lhs,
-    \ 'rhs': printf(join(['<Plug>karakuri.enter_with_rhs(%s)',
+    \ 'rhs': printf(join(['<Plug>karakuri.enter_with_rhs(%s,%s)',
     \                     '<Plug>karakuri.init(%s)',
     \                     '<Plug>karakuri.in(%s)'], ''),
-    \               a:submode, a:submode, a:submode)
+    \               a:submode, lhs, a:submode, a:submode)
     \})
-    " <Plug>karakuri.enter_with_rhs({submode})
+    " <Plug>karakuri.enter_with_rhs({submode},{enter-with-lhs})
     call s:create_map({
     \ 'mode': mode,
     \ 'mapcmd': (noremap ? 'noremap' : 'map'),
     \ 'options': options,
-    \ 'lhs': printf('<Plug>karakuri.enter_with_rhs(%s)', a:submode),
+    \ 'lhs': printf('<Plug>karakuri.enter_with_rhs(%s,%s)', a:submode, lhs),
     \ 'rhs': rhs
     \})
     " <Plug>karakuri.init({submode})
@@ -516,17 +522,17 @@ function! s:Map__create_mappings_of_map(this, submode, mapenv) abort
     \ 'mapcmd': 'map',
     \ 'options': '',
     \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, lhs),
-    \ 'rhs': printf(join(['<Plug>karakuri.map_rhs(%s)',
+    \ 'rhs': printf(join(['<Plug>karakuri.map_rhs(%s,%s)',
     \                     '<Plug>karakuri.prompt(%s)',
     \                     '<Plug>karakuri.in(%s)'], ''),
-    \               a:submode, a:submode, a:submode)
+    \               a:submode, lhs, a:submode, a:submode)
     \})
-    " <Plug>karakuri.map_rhs({submode})
+    " <Plug>karakuri.map_rhs({submode},{map-lhs})
     call s:create_map({
     \ 'mode': mode,
     \ 'mapcmd': (noremap ? 'noremap' : 'map'),
     \ 'options': options,
-    \ 'lhs': printf('<Plug>karakuri.map_rhs(%s)', a:submode),
+    \ 'lhs': printf('<Plug>karakuri.map_rhs(%s,%s)', a:submode, lhs),
     \ 'rhs': rhs
     \})
     " <Plug>karakuri.init({submode})
@@ -577,25 +583,29 @@ endfunction
 let s:Map = {}
 
 function! s:Map_enter_with() abort dict
-  call s:Builder__push_map(self._builder, self, 'enter_with')
+  call s:Builder__push_map(self._builder, self)
+  call s:Builder__construct(self._builder, self, 'enter_with')
   return self
 endfunction
 call s:method(s:, 'Map', 'enter_with')
 
 function! s:Map_leave_with() abort dict
-  call s:Builder__push_map(self._builder, self, 'leave_with')
+  call s:Builder__push_map(self._builder, self)
+  call s:Builder__construct(self._builder, self, 'leave_with')
   return self
 endfunction
 call s:method(s:, 'Map', 'leave_with')
 
 function! s:Map_map() abort dict
-  call s:Builder__push_map(self._builder, self, 'map')
+  call s:Builder__push_map(self._builder, self)
+  call s:Builder__construct(self._builder, self, 'map')
   return self
 endfunction
 call s:method(s:, 'Map', 'map')
 
 function! s:Map_unmap() abort dict
-  call s:Builder__push_map(self._builder, self, 'unmap')
+  call s:Builder__push_map(self._builder, self)
+  call s:Builder__construct(self._builder, self, 'unmap')
   return self
 endfunction
 call s:method(s:, 'Map', 'unmap')
@@ -680,6 +690,7 @@ endfunction
 call s:method(s:, 'Map', 'showmode')
 
 function! s:Map_exec() abort dict
+  call s:Builder__push_map(self._builder, self)
   " TODO: Apply 'timeout', 'timeoutlen', 'showmode'
   for map in self._builder._env
     call s:Map__create_mappings_of_{map.map_type}(self, self._builder._submode, map)
