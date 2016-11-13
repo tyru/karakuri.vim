@@ -549,14 +549,26 @@ endfunction
 function! s:Map__update_init_mapping(this, mode) abort
   let submode = a:this._builder._submode
   let options = extend(copy(a:this._builder._global), a:this._local)
+  let vim_options = s:Map__build_vim_options(a:this)
   call s:create_map({
   \ 'mode': a:mode,
   \ 'mapcmd': 'noremap',
   \ 'options': '<expr>',
   \ 'lhs': printf('<Plug>karakuri.init(%s)', submode),
-  \ 'rhs': printf('<SID>on_entering_submode(%s,%s,%s)',
-  \               string(submode), string(a:mode), string(options))
+  \ 'rhs': printf('<SID>on_entering_submode(%s,%s,%s,%s)',
+  \               string(submode), string(a:mode),
+  \               string(options), string(vim_options))
   \})
+endfunction
+
+function! s:Map__build_vim_options(this) abort
+  let vim_options = {}
+  for name in ['timeout', 'timeoutlen', 'showmode']
+    if has_key(a:this._local, name)
+      let vim_options[name] = a:this._local[name]
+    endif
+  endfor
+  return vim_options
 endfunction
 
 function! s:Map__options_dict2str(this, mapenv) abort
@@ -700,11 +712,11 @@ call s:method(s:, 'Map', 'exec')
 
 
 " <call-init-func>
-function! s:on_entering_submode(submode, mode, options) " abort
+function! s:on_entering_submode(submode, mode, options, vim_options) " abort
   " Save options
-  let saved_options = {}
-  for name in keys(a:options)
-    let saved_options[name] = [bufnr('%'), getbufvar('%', '&' . name)]
+  let saved_vim_options = {}
+  for name in keys(a:vim_options)
+    let saved_vim_options[name] = [bufnr('%'), getbufvar('%', '&' . name)]
   endfor
 
   " <Plug>karakuri.in({submode})
@@ -719,7 +731,7 @@ function! s:on_entering_submode(submode, mode, options) " abort
   \ 'lhs': printf('<Plug>karakuri.in(%s)', a:submode),
   \ 'rhs': printf('<SID>on_fallback_action(%s,%s,%d,%d)',
   \               string(a:submode),
-  \               string(saved_options),
+  \               string(saved_vim_options),
   \               !!keep_leaving_key,
   \               !!inherit)
   \})
@@ -751,7 +763,7 @@ function! s:on_entering_submode(submode, mode, options) " abort
     \ 'options': '<expr>',
     \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, leave_lhs),
     \ 'rhs': printf('<SID>on_leaving_submode(%s,%s)',
-    \               string(a:submode), string(saved_options))
+    \               string(a:submode), string(saved_vim_options))
     \})
   endfor
 
@@ -759,18 +771,21 @@ function! s:on_entering_submode(submode, mode, options) " abort
 endfunction
 
 " <call-finalize-func>
-function! s:on_leaving_submode(submode, saved_options) " abort
+function! s:on_leaving_submode(submode, saved_vim_options) " abort
   " Restore options
-  for name in keys(a:saved_options)
-    let [buf, value] = a:saved_options[name]
+  for name in keys(a:saved_vim_options)
+    let [buf, value] = a:saved_vim_options[name]
     call setbufvar(buf, '&' . name, value)
   endfor
+  " Clear command-line
+  redraw
+  echo ' '
 
   return ''
 endfunction
 
 " <call-fallback-func>
-function! s:on_fallback_action(submode, saved_options, keep_leaving_key, inherit) " abort
+function! s:on_fallback_action(submode, saved_vim_options, keep_leaving_key, inherit) " abort
   if getchar(1)
     if !a:keep_leaving_key
       call getchar(0)
@@ -779,7 +794,7 @@ function! s:on_fallback_action(submode, saved_options, keep_leaving_key, inherit
       call feedkeys(printf("\<Plug>karakuri.in(%s)", a:submode), 'm')
     endif
   endif
-  call s:on_leaving_submode(a:submode, a:saved_options)
+  call s:on_leaving_submode(a:submode, a:saved_vim_options)
 
   return ''
 endfunction
