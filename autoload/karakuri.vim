@@ -78,17 +78,17 @@ if v:version >=# 800
   let s:TYPE_CHANNEL = 9
 endif
 let s:TYPE_OF = []
-let s:TYPE_OF[s:TYPE_NUMBER] = 'Number'
-let s:TYPE_OF[s:TYPE_STRING] = 'String'
-let s:TYPE_OF[s:TYPE_FUNCREF] = 'Funcref'
-let s:TYPE_OF[s:TYPE_LIST] = 'List'
-let s:TYPE_OF[s:TYPE_DICT] = 'Dictionary'
-let s:TYPE_OF[s:TYPE_FLOAT] = 'Float'
+let s:TYPE_OF += ['Number']
+let s:TYPE_OF += ['String']
+let s:TYPE_OF += ['Funcref']
+let s:TYPE_OF += ['List']
+let s:TYPE_OF += ['Dictionary']
+let s:TYPE_OF += ['Float']
 if v:version >=# 800
-  let s:TYPE_OF[s:TYPE_BOOLEAN] = 'Boolean'
-  let s:TYPE_OF[s:TYPE_NONE] = 'None'
-  let s:TYPE_OF[s:TYPE_JOB] = 'Job'
-  let s:TYPE_OF[s:TYPE_CHANNEL] = 'Channel'
+  let s:TYPE_OF += ['Boolean']
+  let s:TYPE_OF += ['None']
+  let s:TYPE_OF += ['Job']
+  let s:TYPE_OF += ['Channel']
 endif
 
 function! s:validate(submode, value, type) abort
@@ -515,7 +515,7 @@ function! s:Map__create_mappings_of_map(this, submode, mapenv) abort
     \ 'mode': mode,
     \ 'mapcmd': 'map',
     \ 'options': '',
-    \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, lhs)
+    \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, lhs),
     \ 'rhs': printf(join(['<Plug>karakuri.map_rhs(%s)',
     \                     '<Plug>karakuri.prompt(%s)',
     \                     '<Plug>karakuri.in(%s)'], ''),
@@ -544,7 +544,7 @@ function! s:Map__update_init_mapping(this, mode) abort
   let submode = a:this._builder._submode
   let options = extend(copy(a:this._builder._global), a:this._local)
   call s:create_map({
-  \ 'modes': a:mode,
+  \ 'mode': a:mode,
   \ 'mapcmd': 'noremap',
   \ 'options': '<expr>',
   \ 'lhs': printf('<Plug>karakuri.init(%s)', submode),
@@ -601,10 +601,10 @@ endfunction
 call s:method(s:, 'Map', 'unmap')
 
 function! s:Map_mode(modes) abort dict
-  call s:validate(self._submode, a:modes, s:TYPE_STRING)
+  call s:validate(self._builder._submode, a:modes, s:TYPE_STRING)
   let pos = match(a:modes, '[^nvoicsxl]')
   if pos isnot -1
-    call s:throw(self._submode, "Invalid character '" . a:modes[pos] . "' in the argument of .mode().")
+    call s:throw(self._builder._submode, "Invalid character '" . a:modes[pos] . "' in the argument of .mode().")
   endif
   let self._map.modes = a:modes
   return self
@@ -612,14 +612,14 @@ endfunction
 call s:method(s:, 'Map', 'mode')
 
 function! s:Map_lhs(lhs) abort dict
-  call s:validate(self._submode, a:lhs, s:TYPE_STRING)
+  call s:validate(self._builder._submode, a:lhs, s:TYPE_STRING)
   let self._map.lhs = a:lhs
   return self
 endfunction
 call s:method(s:, 'Map', 'lhs')
 
 function! s:Map_rhs(rhs) abort dict
-  call s:validate(self._submode, a:rhs, s:TYPE_STRING)
+  call s:validate(self._builder._submode, a:rhs, s:TYPE_STRING)
   let self._map.rhs = a:rhs
   return self
 endfunction
@@ -682,7 +682,7 @@ call s:method(s:, 'Map', 'showmode')
 function! s:Map_exec() abort dict
   " TODO: Apply 'timeout', 'timeoutlen', 'showmode'
   for map in self._builder._env
-    call s:Map__create_mappings_of_{map.map_type}(self, self._submode, map)
+    call s:Map__create_mappings_of_{map.map_type}(self, self._builder._submode, map)
   endfor
 endfunction
 call s:method(s:, 'Map', 'exec')
@@ -703,7 +703,7 @@ function! s:on_entering_submode(submode, options) " abort
     let inherit =
     \ get(a:options, 'inherit', s:MAP_UI_DEFAULT_OPTIONS.inherit)
     call s:create_map({
-    \ 'modes': a:mode,
+    \ 'mode': a:mode,
     \ 'mapcmd': 'noremap',
     \ 'options': '<expr>',
     \ 'lhs': printf('<Plug>karakuri.in(%s)', a:submode),
@@ -716,7 +716,7 @@ function! s:on_entering_submode(submode, options) " abort
 
     " <Plug>karakuri.prompt({submode})
     call s:create_map({
-    \ 'modes': a:mode,
+    \ 'mode': a:mode,
     \ 'mapcmd': 'noremap',
     \ 'options': '<expr>',
     \ 'lhs': printf('<Plug>karakuri.prompt(%s)', a:submode),
