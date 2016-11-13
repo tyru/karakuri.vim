@@ -19,6 +19,17 @@ call karakuri#builder('undo/redo')
   \.map().mode('n').lhs('+').rhs('g+')
   \.exec()
 
+call karakuri#builder('winsize')
+  \.enter_with().mode('n').lhs('<C-w>>').rhs('<C-w>>')
+  \.enter_with().mode('n').lhs('<C-w><').rhs('<C-w><')
+  \.enter_with().mode('n').lhs('<C-w>+').rhs('<C-w>+')
+  \.enter_with().mode('n').lhs('<C-w>-').rhs('<C-w>-')
+  \.map().mode('n').lhs('>').rhs('<C-w>>')
+  \.map().mode('n').lhs('<').rhs('<C-w><')
+  \.map().mode('n').lhs('+').rhs('<C-w>+')
+  \.map().mode('n').lhs('-').rhs('<C-w>-')
+  \.exec()
+
 " Change options
 call karakuri#builder('undo/redo')
   \.keep_leaving_key(v:false)
@@ -28,3 +39,4 @@ call karakuri#builder('undo/redo')
   \.map().mode('n').lhs('-').rhs('g-')
   \.map().mode('n').lhs('+').rhs('g+')
   \.exec()
+
