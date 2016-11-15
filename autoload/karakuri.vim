@@ -489,8 +489,6 @@ endfunction
 
 function! s:Map__create_mappings_of_leave_with(this, submode, mapenv) abort
   let modes = s:Map__get_option(a:this, a:mapenv, 'modes')
-  let noremap = s:Map__get_option(a:this, a:mapenv, 'noremap')
-  let options = s:Map__options_dict2str(a:this, a:mapenv)
   let lhs = s:Map__get_option(a:this, a:mapenv, 'lhs')
   for mode in split(modes, '\zs')
     " <Plug>karakuri.leave_with_keyseqs({submode})
