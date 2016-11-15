@@ -113,3 +113,18 @@ call karakuri#builder('textmanip')
   \.map().mode('x').lhs('<C-l>').rhs('<Plug>(textmanip-move-right-r)')
   \.exec()
 
+" =========================================================
+"
+" winmove
+"
+
+let s:INVOKE_WINMOVE_SUBMODE = '<Leader>wm'
+
+call karakuri#builder('winmove')
+  \.enter_with().mode('n').lhs(s:INVOKE_WINMOVE_SUBMODE).rhs('<Nop>')
+  \.map().mode('n').lhs('j').rhs('<Plug>(winmove-down)')
+  \.map().mode('n').lhs('k').rhs('<Plug>(winmove-up)')
+  \.map().mode('n').lhs('h').rhs('<Plug>(winmove-left)')
+  \.map().mode('n').lhs('l').rhs('<Plug>(winmove-right)')
+  \.exec()
+
