@@ -53,7 +53,8 @@ scriptencoding utf-8
 "   * {mode}noremap <expr> <Plug>karakuri.in({submode}) <call-fallback-func>
 "   * {mode}noremap <expr> <Plug>karakuri.prompt({submode}) <call-prompt-func>
 "   If '<Plug>karakuri.leave_with_keyseqs({submode})' was defined:
-"     * {mode}{nore}map <expr> <Plug>karakuri.in({submode}){leave-with-lhs} <call-finalize-func>
+"     * {mode}noremap <expr> <Plug>karakuri.in({submode}){leave-with-lhs} <call-finalize-func>
+"     * (same mappings for {leave-with-lhs-2}, {leave-with-lhs-3}, ...
 "   Else:
 "     * {mode}noremap <expr> <Plug>karakuri.in({submode}){default-keyseqs-to-leave} <call-finalize-func>
 "
