@@ -143,12 +143,13 @@ endfunction
 function! s:create_map(args) abort
   execute a:args.mode . a:args.mapcmd
   \       a:args.options
-  \       a:args.lhs
-  \       a:args.rhs
+  \       substitute(a:args.lhs, '|', '<Bar>', 'g')
+  \       substitute(a:args.rhs, '|', '<Bar>', 'g')
 endfunction
 
 function! s:create_unmap(args) abort
-  execute a:args.mode . 'unmap' a:args.lhs
+  execute a:args.mode . 'unmap'
+  \       substitute(a:args.lhs, '|', '<Bar>', 'g')
 endfunction
 
 
