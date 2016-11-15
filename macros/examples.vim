@@ -69,9 +69,14 @@ call karakuri#builder('winsize')
   \.exec()
 
 " Change options
+function! s:prompt_func(submode) abort
+  return printf("[%s] <,>:dec/inc width, -,+:dec/inc height", a:submode)
+endfunction
+
 call karakuri#builder('winsize')
   \.keep_leaving_key(v:true)
   \.always_show_submode(v:true)
+  \.prompt(function('s:prompt_func'))
   \.enter_with().mode('n').lhs('<C-w>>').rhs('<C-w>>')
   \.enter_with().mode('n').lhs('<C-w><').rhs('<C-w><')
   \.enter_with().mode('n').lhs('<C-w>+').rhs('<C-w>+')

@@ -120,6 +120,18 @@ function! s:validate(submode, value, type) abort
   endif
 endfunction
 
+function! s:validate_named_func(submode, F) abort
+  call s:validate(a:submode, a:F, s:TYPE_FUNCREF)
+  try
+    call eval(string(a:F))
+  catch /E129/
+    call s:throw(a:submode,
+    \ 'Expected named funcref value but got ' .
+    \ 'unnamed funcref (it can be created by funcref(), or lambda).'
+    \)
+  endtry
+endfunction
+
 function! s:throw(submode, msg) abort
   throw 'karakuri: ' . a:submode . ': ' . a:msg
 endfunction
@@ -300,7 +312,13 @@ endfunction
 "       * Global
 "     * Builder.always_show_submode(b : Bool) : Builder
 "       * Global
+"     * Builder.prompt(f : Funcref) : Builder
+"       * Global
 "
+
+function! s:default_prompt_func(submode) abort
+  return '-- Submode:' a:submode '--'
+endfunction
 
 let s:MAP_UI_DEFAULT_OPTIONS = {
 \ 'silent': 0,
@@ -315,7 +333,8 @@ let s:MAP_UI_DEFAULT_OPTIONS = {
 \ 'inherit': 0,
 \ 'keep_leaving_key': 0,
 \ 'keyseqs_to_leave': ['<Esc>'],
-\ 'always_show_submode': 0
+\ 'always_show_submode': 0,
+\ 'prompt': function('s:default_prompt_func')
 \}
 
 function! s:Builder__new(submode) abort
@@ -390,6 +409,13 @@ function! s:Builder_always_show_submode(b) abort dict
   return self
 endfunction
 call s:method(s:, 'Builder', 'always_show_submode')
+
+function! s:Builder_prompt(F) abort dict
+  call s:validate_named_func(self._submode, a:F)
+  let self._global.prompt = a:F
+  return self
+endfunction
+call s:method(s:, 'Builder', 'prompt')
 
 
 " Map:
@@ -765,12 +791,15 @@ function! s:on_entering_submode(submode, mode, options, vim_options) " abort
   \})
 
   " <Plug>karakuri.prompt({submode})
+  let Prompt_func =
+  \ get(a:options, 'prompt', s:MAP_UI_DEFAULT_OPTIONS.prompt)
   call s:create_map({
   \ 'mode': a:mode,
   \ 'mapcmd': 'noremap',
   \ 'options': '<expr>',
   \ 'lhs': printf('<Plug>karakuri.prompt(%s)', a:submode),
-  \ 'rhs': printf('<SID>on_prompt_action(%s)', string(a:submode))
+  \ 'rhs': printf('<SID>on_prompt_action(%s,%s)',
+  \               string(a:submode), string(Prompt_func))
   \})
 
   " If '<Plug>karakuri.leave_with_keyseqs({submode})' was defined:
@@ -830,10 +859,10 @@ function! s:on_fallback_action(submode, saved_vim_options, keep_leaving_key, inh
 endfunction
 
 " <call-prompt-func>
-function! s:on_prompt_action(submode) " abort
+function! s:on_prompt_action(submode, Prompt_func) " abort
   redraw
   echohl ModeMsg
-  echo '-- Submode:' a:submode '--'
+  echo a:Prompt_func(a:submode)
   echohl None
   return ''
 endfunction
