@@ -303,7 +303,7 @@ endfunction
 "
 
 function! s:default_prompt_func(submode) abort
-  return '-- Submode:' a:submode '--'
+  return '-- Submode: ' . a:submode . ' --'
 endfunction
 
 let s:MAP_UI_DEFAULT_OPTIONS = {
