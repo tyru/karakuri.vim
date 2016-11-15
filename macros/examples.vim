@@ -31,7 +31,7 @@ call karakuri#builder('undo/redo')
 
 " =========================================================
 "
-" for test
+" winsize (for test)
 "
 
 " submode.vim compatible interface
@@ -86,3 +86,30 @@ call karakuri#builder('winsize')
   \.map().mode('n').lhs('+').rhs('<C-w>+')
   \.map().mode('n').lhs('-').rhs('<C-w>-')
   \.exec()
+
+" =========================================================
+"
+" textmanip
+"
+
+let s:INVOKE_TEXTMANIP_SUBMODE = '<Leader>tm'
+
+call karakuri#builder('textmanip')
+  \.enter_with().mode('n').lhs(s:INVOKE_TEXTMANIP_SUBMODE).rhs('<Nop>')
+  \.enter_with().mode('x').lhs(s:INVOKE_TEXTMANIP_SUBMODE).rhs('<Nop>')
+  \.map().mode('x').lhs('J').rhs('<Plug>(textmanip-duplicate-down)')
+  \.map().mode('n').lhs('J').rhs('<Plug>(textmanip-duplicate-down)')
+  \.map().mode('x').lhs('K').rhs('<Plug>(textmanip-duplicate-up)')
+  \.map().mode('n').lhs('K').rhs('<Plug>(textmanip-duplicate-up)')
+  \.map().mode('x').lhs('j').rhs('<Plug>(textmanip-move-down)')
+  \.map().mode('x').lhs('k').rhs('<Plug>(textmanip-move-up)')
+  \.map().mode('x').lhs('h').rhs('<Plug>(textmanip-move-left)')
+  \.map().mode('x').lhs('l').rhs('<Plug>(textmanip-move-right)')
+  \.map().mode('n').lhs('t').rhs('<Plug>(textmanip-toggle-mode)')
+  \.map().mode('x').lhs('t').rhs('<Plug>(textmanip-toggle-mode)')
+  \.map().mode('x').lhs('<C-j>').rhs('<Plug>(textmanip-move-down-r)')
+  \.map().mode('x').lhs('<C-k>').rhs('<Plug>(textmanip-move-up-r)')
+  \.map().mode('x').lhs('<C-h>').rhs('<Plug>(textmanip-move-left-r)')
+  \.map().mode('x').lhs('<C-l>').rhs('<Plug>(textmanip-move-right-r)')
+  \.exec()
+
