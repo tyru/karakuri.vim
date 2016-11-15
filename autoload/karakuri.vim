@@ -66,6 +66,14 @@ scriptencoding utf-8
 " Utilities
 "
 
+if v:version >=# 800
+  let s:JSON_ENCODE = 'json_encode'
+  let s:JSON_DECODE = 'json_decode'
+else
+  let s:JSON_ENCODE = 'eval'
+  let s:JSON_DECODE = 'string'
+endif
+
 let s:TYPE_NUMBER = 0
 let s:TYPE_STRING = 1
 let s:TYPE_FUNCREF = 2
@@ -495,13 +503,13 @@ function! s:Map__create_mappings_of_leave_with(this, submode, mapenv) abort
     " <Plug>karakuri.leave_with_keyseqs({submode})
     let leave_with_keyseqs = printf('<Plug>karakuri.leave_with_keyseqs(%s)', a:submode)
     let old_rhs = maparg(leave_with_keyseqs, mode, 0)
-    let rhs_list = old_rhs !=# '' ? eval(old_rhs) : []
+    let rhs_list = old_rhs !=# '' ? {s:JSON_DECODE}(old_rhs) : []
     call s:create_map({
     \ 'mode': mode,
     \ 'mapcmd': 'noremap',
     \ 'options': '',
     \ 'lhs': leave_with_keyseqs,
-    \ 'rhs': string(rhs_list + [lhs])
+    \ 'rhs': {s:JSON_ENCODE}(rhs_list + [lhs])
     \})
     " <Plug>karakuri.init({submode})
     call s:Map__update_init_mapping(a:this, mode)
@@ -751,7 +759,7 @@ function! s:on_entering_submode(submode, mode, options, vim_options) " abort
   let exist_lhs = printf('<Plug>karakuri.leave_with_keyseqs(%s)', a:submode)
   let leave_lhs = maparg(exist_lhs, a:mode, 0)
   if leave_lhs !=# ''
-    let leave_lhs_list = eval(leave_lhs)
+    let leave_lhs_list = {s:JSON_DECODE}(leave_lhs)
   else
     let leave_lhs_list = deepcopy(s:MAP_UI_DEFAULT_OPTIONS.keyseqs_to_leave)
   endif
