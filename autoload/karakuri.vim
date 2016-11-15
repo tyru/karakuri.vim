@@ -206,14 +206,6 @@ function! karakuri#restore_options() abort
 endfunction
 
 function! karakuri#enter_with(submode, modes, options, lhs, ...) abort
-  call s:validate(a:submode, a:submode, s:TYPE_STRING)
-  call s:validate(a:submode, a:modes, s:TYPE_STRING)
-  call s:validate(a:submode, a:options, s:TYPE_STRING)
-  call s:validate(a:submode, a:lhs, s:TYPE_STRING)
-  if a:0
-    call s:validate(a:submode, a:1, s:TYPE_STRING)
-  endif
-
   let map = karakuri#builder(a:submode).enter_with()
   let map = map.mode(a:modes).lhs(a:lhs)
   if a:options !=# ''
@@ -226,11 +218,6 @@ function! karakuri#enter_with(submode, modes, options, lhs, ...) abort
 endfunction
 
 function! karakuri#leave_with(submode, modes, options, lhs) abort
-  call s:validate(a:submode, a:submode, s:TYPE_STRING)
-  call s:validate(a:submode, a:modes, s:TYPE_STRING)
-  call s:validate(a:submode, a:options, s:TYPE_STRING)
-  call s:validate(a:submode, a:lhs, s:TYPE_STRING)
-
   let map = karakuri#builder(a:submode).leave_with()
   let map = map.mode(a:modes).lhs(a:lhs)
   if a:options !=# ''
@@ -240,12 +227,6 @@ function! karakuri#leave_with(submode, modes, options, lhs) abort
 endfunction
 
 function! karakuri#map(submode, modes, options, lhs, rhs) abort
-  call s:validate(a:submode, a:submode, s:TYPE_STRING)
-  call s:validate(a:submode, a:modes, s:TYPE_STRING)
-  call s:validate(a:submode, a:options, s:TYPE_STRING)
-  call s:validate(a:submode, a:lhs, s:TYPE_STRING)
-  call s:validate(a:submode, a:rhs, s:TYPE_STRING)
-
   let map = karakuri#builder(a:submode).map()
   let map = map.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
   if a:options !=# ''
@@ -255,11 +236,6 @@ function! karakuri#map(submode, modes, options, lhs, rhs) abort
 endfunction
 
 function! karakuri#unmap(submode, modes, options, lhs) abort
-  call s:validate(a:submode, a:submode, s:TYPE_STRING)
-  call s:validate(a:submode, a:modes, s:TYPE_STRING)
-  call s:validate(a:submode, a:options, s:TYPE_STRING)
-  call s:validate(a:submode, a:lhs, s:TYPE_STRING)
-
   let map = karakuri#builder(a:submode).unmap()
   let map = map.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
   if a:options !=# ''
