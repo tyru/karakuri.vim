@@ -5,7 +5,9 @@ scriptencoding utf-8
 "
 " 1. {enter-with-lhs}
 " 2. <Plug>karakuri.enter_with_rhs({submode},{enter-with-lhs})
-" 3. <Plug>karakuri.init({submode})
+" 3. <Plug>karakuri.init({submode}) (<call-init-func>)
+" 3.1. Save vim options
+" 3.2. Set current submode (karakuri#current())
 " 4. <Plug>karakuri.in({submode})
 "   4.1. timeout -> Go to "5. <call-fallback-func>"
 "   4.2. User types a key {map-lhs}
@@ -26,6 +28,8 @@ scriptencoding utf-8
 "     5.2.1. Go to "6. Finalization"
 " 6. Finalization
 "   6.1. <call-finalize-func>
+"   6.1.1. Restore saved vim options
+"   6.1.2. Clear current submode (karakuri#current())
 "   6.2.  Go to parent mode.
 "
 " ==============================================================================
@@ -61,6 +65,12 @@ scriptencoding utf-8
 " unmap() *undefines*:
 "   * TODO
 "
+
+"
+" Variables
+"
+
+let s:current_submode = ''
 
 "
 " Utilities
@@ -172,7 +182,7 @@ endfunction
 "
 
 function! karakuri#current() abort
-  " TODO
+  return s:current_submode
 endfunction
 
 function! karakuri#restore_options() abort
@@ -720,11 +730,13 @@ call s:method(s:, 'Map', 'exec')
 
 " <call-init-func>
 function! s:on_entering_submode(submode, mode, options, vim_options) " abort
-  " Save options
+  " Save vim options
   let saved_vim_options = {}
   for name in keys(a:vim_options)
     let saved_vim_options[name] = [bufnr('%'), getbufvar('%', '&' . name)]
   endfor
+  " Save current submode
+  let s:current_submode = a:submode
 
   " <Plug>karakuri.in({submode})
   let keep_leaving_key =
@@ -779,11 +791,13 @@ endfunction
 
 " <call-finalize-func>
 function! s:on_leaving_submode(submode, saved_vim_options) " abort
-  " Restore options
+  " Restore vim options
   for name in keys(a:saved_vim_options)
     let [buf, value] = a:saved_vim_options[name]
     call setbufvar(buf, '&' . name, value)
   endfor
+  " Clear current submode
+  let s:current_submode = ''
   " Clear command-line
   redraw
   echo ' '
