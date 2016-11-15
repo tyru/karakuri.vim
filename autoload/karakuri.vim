@@ -70,7 +70,7 @@ scriptencoding utf-8
 " Variables
 "
 
-let s:current_submode = ''
+let s:running_submodes = []
 
 "
 " Utilities
@@ -186,7 +186,10 @@ function! karakuri#current() abort
 endfunction
 
 function! karakuri#restore_options() abort
-  " TODO
+  while !empty(s:running_submodes)
+    let r = remove(s:running_submodes, -1)
+    call s:on_leaving_submode(r.submode, r.vim_options)
+  endwhile
 endfunction
 
 function! karakuri#enter_with(submode, modes, options, lhs, ...) abort
@@ -735,8 +738,13 @@ function! s:on_entering_submode(submode, mode, options, vim_options) " abort
   for name in keys(a:vim_options)
     let saved_vim_options[name] = [bufnr('%'), getbufvar('%', '&' . name)]
   endfor
-  " Save current submode
-  let s:current_submode = a:submode
+  " Save scope-local variables for:
+  " * karakuri#current()
+  " * karakuri#restore_options()
+  let s:running_submodes += [{
+  \ 'submode': a:submode,
+  \ 'vim_options': saved_vim_options,
+  \}]
 
   " <Plug>karakuri.in({submode})
   let keep_leaving_key =
@@ -796,8 +804,8 @@ function! s:on_leaving_submode(submode, saved_vim_options) " abort
     let [buf, value] = a:saved_vim_options[name]
     call setbufvar(buf, '&' . name, value)
   endfor
-  " Clear current submode
-  let s:current_submode = ''
+  " Clear scope-local variables
+  call remove(s:running_submodes, -1)
   " Clear command-line
   redraw
   echo ' '
