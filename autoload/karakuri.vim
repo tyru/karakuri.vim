@@ -132,6 +132,16 @@ function! s:validate_named_func(submode, F) abort
   endtry
 endfunction
 
+function! s:validate_non_empty_string(submode, str) abort
+  call s:validate(a:submode, a:str, s:TYPE_STRING)
+  if a:str ==# ''
+    call s:throw(a:submode,
+    \ 'Expected non-empty String value but got ' .
+    \ 'empty string value.'
+    \)
+  endif
+endfunction
+
 function! s:throw(submode, msg) abort
   throw 'karakuri: ' . a:submode . ': ' . a:msg
 endfunction
@@ -646,7 +656,7 @@ endfunction
 call s:method(s:, 'Map', 'unmap')
 
 function! s:Map_mode(modes) abort dict
-  call s:validate(self._builder._submode, a:modes, s:TYPE_STRING)
+  call s:validate_non_empty_string(self._builder._submode, a:modes)
   let pos = match(a:modes, '[^nvoicsxl]')
   if pos isnot -1
     call s:throw(self._builder._submode, "Invalid character '" . a:modes[pos] . "' in the argument of .mode().")
@@ -657,7 +667,7 @@ endfunction
 call s:method(s:, 'Map', 'mode')
 
 function! s:Map_lhs(lhs) abort dict
-  call s:validate(self._builder._submode, a:lhs, s:TYPE_STRING)
+  call s:validate_non_empty_string(self._builder._submode, a:lhs)
   let self._map.lhs = a:lhs
   return self
 endfunction
@@ -665,7 +675,7 @@ call s:method(s:, 'Map', 'lhs')
 
 function! s:Map_rhs(rhs) abort dict
   call s:validate(self._builder._submode, a:rhs, s:TYPE_STRING)
-  let self._map.rhs = a:rhs
+  let self._map.rhs = a:rhs !=# '' ? a:rhs : '<Nop>'
   return self
 endfunction
 call s:method(s:, 'Map', 'rhs')
