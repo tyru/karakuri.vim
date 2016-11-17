@@ -280,6 +280,9 @@ endfunction
 "         * Map._map
 "         * Map._local
 "     * _global : Dictionary = { <option properties> ... }
+"       * 'timeout'
+"       * 'timeoutlen'
+"       * 'showmode'
 "       * 'inherit'
 "       * 'keep_leaving_key'
 "       * 'keyseqs_to_leave'
@@ -298,6 +301,13 @@ endfunction
 "         Mapper is a Map
 "     * Builder.unmap() : Unmapper
 "         Unmapper is a Map
+"
+"     * Builder.timeout(b : Bool) : Builder
+"       * Global version of Map.timeout()
+"     * Builder.timeoutlen(msec : Number) : Builder
+"       * Global version of Map.timeoutlen()
+"     * Builder.showmode(b : Bool) : Builder
+"       * Global version of Map.showmode()
 "
 "     * Builder.inherit(b : Bool) : Builder
 "       * Global option
@@ -396,6 +406,24 @@ function! s:Builder_unmap() abort dict
   return s:Map__new(self, 'unmap')
 endfunction
 call s:method(s:, 'Builder', 'unmap')
+
+function! s:Builder_timeout(b) abort dict
+  let self._global.timeout = !!a:b
+  return self
+endfunction
+call s:method(s:, 'Builder', 'timeout')
+
+function! s:Builder_timeoutlen(msec) abort dict
+  let self._global.timeoutlen = a:msec
+  return self
+endfunction
+call s:method(s:, 'Builder', 'timeoutlen')
+
+function! s:Builder_showmode(b) abort dict
+  let self._global.showmode = !!a:b
+  return self
+endfunction
+call s:method(s:, 'Builder', 'showmode')
 
 function! s:Builder_inherit(b) abort dict
   let self._global.inherit = !!a:b
@@ -647,6 +675,8 @@ function! s:Map__build_vim_options(this) abort
   for name in ['timeout', 'timeoutlen', 'showmode']
     if has_key(a:this._local, name)
       let vim_options[name] = a:this._local[name]
+    elseif has_key(a:this._builder._global, name)
+      let vim_options[name] = a:this._builder._global[name]
     endif
   endfor
   return vim_options
