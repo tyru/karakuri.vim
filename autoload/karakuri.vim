@@ -436,6 +436,7 @@ call s:method(s:, 'Builder', 'prompt')
 "     * Map.rhs(rhs : String) : Map
 "     * Map.silent(b : Bool) : Map
 "     * Map.noremap(b : Bool) : Map
+"     * Map.remap(b : Bool) : Map
 "     * Map.expr(b : Bool) : Map
 "     * Map.buffer(b : Bool) : Map
 "     * Map.unique(b : Bool) : Map
@@ -691,6 +692,12 @@ function! s:Map_noremap(b) abort dict
   return self
 endfunction
 call s:method(s:, 'Map', 'noremap')
+
+function! s:Map_remap(b) abort dict
+  let self._map.noremap = !a:b
+  return self
+endfunction
+call s:method(s:, 'Map', 'remap')
 
 function! s:Map_expr(b) abort dict
   let self._map.expr = !!a:b
