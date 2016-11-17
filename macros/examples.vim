@@ -70,22 +70,34 @@ call karakuri#builder('winsize')
   \.exec()
 
 " Change options
-function! s:prompt_func(submode) abort
-  return printf("[%s] <,>:dec/inc width, -,+:dec/inc height", a:submode)
+function! s:init_func(ctx) abort
+  echom printf("[%s] Initializing...", a:ctx.submode)
+endfunction
+function! s:prompt_func(ctx) abort
+  return printf("[%s] <,>:dec/inc width, -,+:dec/inc height", a:ctx.submode)
+endfunction
+function! s:timeout_func(ctx) abort
+  echom printf("[%s] Timeout!", a:ctx.submode)
+endfunction
+function! s:finalize_func(ctx) abort
+  echom printf("[%s] Finalizing...", a:ctx.submode)
 endfunction
 
 call karakuri#builder('winsize')
   \.keep_leaving_key(v:true)
   \.always_show_submode(v:true)
-  \.prompt(function('s:prompt_func'))
-  \.enter_with().mode('n').lhs('<C-w>>').rhs('<C-w>>')
-  \.enter_with().mode('n').lhs('<C-w><').rhs('<C-w><')
-  \.enter_with().mode('n').lhs('<C-w>+').rhs('<C-w>+')
-  \.enter_with().mode('n').lhs('<C-w>-').rhs('<C-w>-')
-  \.map().mode('n').lhs('>').rhs('<C-w>>')
-  \.map().mode('n').lhs('<').rhs('<C-w><')
-  \.map().mode('n').lhs('+').rhs('<C-w>+')
-  \.map().mode('n').lhs('-').rhs('<C-w>-')
+  \.on_init(function('s:init_func'))
+  \.on_prompt(function('s:prompt_func'))
+  \.on_timeout(function('s:timeout_func'))
+  \.on_finalize(function('s:finalize_func'))
+  \.enter_with().timeout(v:true).timeoutlen(1000).mode('n').lhs('<C-w>>').rhs('<C-w>>')
+  \.enter_with().timeout(v:true).timeoutlen(1000).mode('n').lhs('<C-w><').rhs('<C-w><')
+  \.enter_with().timeout(v:true).timeoutlen(1000).mode('n').lhs('<C-w>+').rhs('<C-w>+')
+  \.enter_with().timeout(v:true).timeoutlen(1000).mode('n').lhs('<C-w>-').rhs('<C-w>-')
+  \.map().timeout(v:true).timeoutlen(1000).mode('n').lhs('>').rhs('<C-w>>')
+  \.map().timeout(v:true).timeoutlen(1000).mode('n').lhs('<').rhs('<C-w><')
+  \.map().timeout(v:true).timeoutlen(1000).mode('n').lhs('+').rhs('<C-w>+')
+  \.map().timeout(v:true).timeoutlen(1000).mode('n').lhs('-').rhs('<C-w>-')
   \.exec()
 
 " =========================================================

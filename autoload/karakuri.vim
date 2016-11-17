@@ -152,7 +152,8 @@ endfunction
 let s:SIDP = s:SID()
 
 function! s:method(scope, obj_name, method_name) abort
-  let a:scope[a:obj_name][a:method_name] = function('<SNR>' . s:SIDP . '_' . a:obj_name . '_' . a:method_name)
+  let a:scope[a:obj_name][a:method_name] =
+  \ function('<SNR>' . s:SIDP . '_' . a:obj_name . '_' . a:method_name)
 endfunction
 
 function! s:get_option(submode, global, local, name) abort
@@ -211,7 +212,7 @@ endfunction
 function! karakuri#restore_options() abort
   while !empty(s:running_submodes)
     let r = remove(s:running_submodes, -1)
-    call s:on_leaving_submode(r.submode, r.vim_options)
+    call s:on_leaving_submode(r.submode, r.vim_options, r.on_finalize)
   endwhile
 endfunction
 
@@ -278,7 +279,15 @@ endfunction
 "       * <MapEnv> : All merged properties of (conflict must NOT be occurred):
 "         * Map._map
 "         * Map._local
-"     * _global : Dictionary[String,Any] = { <option properties> ... }
+"     * _global : Dictionary = { <option properties> ... }
+"       * 'inherit'
+"       * 'keep_leaving_key'
+"       * 'keyseqs_to_leave'
+"       * 'always_show_submode'
+"       * 'on_init'
+"       * 'on_prompt'
+"       * 'on_timeout'
+"       * 'on_finalize'
 "
 "   Methods:
 "     * Builder.enter_with() : EnterWith
@@ -291,15 +300,29 @@ endfunction
 "         Unmapper is a Map
 "
 "     * Builder.inherit(b : Bool) : Builder
-"       * Global
+"       * Global option
 "     * Builder.keep_leaving_key(b : Bool) : Builder
-"       * Global
+"       * Global option
 "     * Builder.keyseqs_to_leave(keyseqs : List[String]) : Builder
-"       * Global
+"       * Global option
 "     * Builder.always_show_submode(b : Bool) : Builder
-"       * Global
-"     * Builder.prompt(f : Funcref) : Builder
-"       * Global
+"       * Global option
+"     * Builder.on_init(f : Funcref) : Builder
+"       * Global option
+"       * f = (ctx: Dictionary) => Unit
+"         * ctx = {submode: String}
+"     * Builder.on_prompt(f : Funcref) : Builder
+"       * Global option, Return value is echoed to command-line
+"       * f = (ctx: Dictionary) => String
+"         * ctx = {submode: String}
+"     * Builder.on_timeout(f : Funcref) : Builder
+"       * Global option
+"       * f = (ctx: Dictionary) => Unit
+"         * ctx = {submode: String}
+"     * Builder.on_finalize(f : Funcref) : Builder
+"       * Global option
+"       * f = (ctx: Dictionary) => Unit
+"         * ctx = {submode: String}
 "
 
 function! s:default_prompt_func(submode) abort
@@ -320,7 +343,10 @@ let s:MAP_UI_DEFAULT_OPTIONS = {
 \ 'keep_leaving_key': 0,
 \ 'keyseqs_to_leave': ['<Esc>'],
 \ 'always_show_submode': 0,
-\ 'prompt': function('s:default_prompt_func')
+\ 'on_init': [],
+\ 'on_prompt': [function('s:default_prompt_func')],
+\ 'on_timeout': [],
+\ 'on_finalize': []
 \}
 
 function! s:Builder__new(submode) abort
@@ -396,12 +422,33 @@ function! s:Builder_always_show_submode(b) abort dict
 endfunction
 call s:method(s:, 'Builder', 'always_show_submode')
 
-function! s:Builder_prompt(F) abort dict
+function! s:Builder_on_init(F) abort dict
   call s:validate_named_func(self._submode, a:F)
-  let self._global.prompt = a:F
+  let self._global.on_init = get(self._global, 'on_init', []) + [a:F]
   return self
 endfunction
-call s:method(s:, 'Builder', 'prompt')
+call s:method(s:, 'Builder', 'on_init')
+
+function! s:Builder_on_prompt(F) abort dict
+  call s:validate_named_func(self._submode, a:F)
+  let self._global.on_prompt = get(self._global, 'on_prompt', []) + [a:F]
+  return self
+endfunction
+call s:method(s:, 'Builder', 'on_prompt')
+
+function! s:Builder_on_timeout(F) abort dict
+  call s:validate_named_func(self._submode, a:F)
+  let self._global.on_timeout = get(self._global, 'on_timeout', []) + [a:F]
+  return self
+endfunction
+call s:method(s:, 'Builder', 'on_timeout')
+
+function! s:Builder_on_finalize(F) abort dict
+  call s:validate_named_func(self._submode, a:F)
+  let self._global.on_finalize = get(self._global, 'on_finalize', []) + [a:F]
+  return self
+endfunction
+call s:method(s:, 'Builder', 'on_finalize')
 
 
 " Map:
@@ -410,7 +457,7 @@ call s:method(s:, 'Builder', 'prompt')
 "     * _builder : Builder =  Builder object
 "     * _map_type: <map_type> : String
 "       * One of 'enter_with', 'leave_with', 'map', 'unmap'
-"     * _map : Dictionary[String,Any] = { <map properties> ... }
+"     * _map : Dictionary = { <map properties> ... }
 "       * 'modes'
 "       * 'lhs'
 "       * 'rhs'
@@ -420,7 +467,7 @@ call s:method(s:, 'Builder', 'prompt')
 "       * 'buffer'
 "       * 'unique'
 "       * 'nowait'
-"     * _local : Dictionary[String,Any] = { <option properties> ... }
+"     * _local : Dictionary = { <option properties> ... }
 "       * 'timeout'
 "       * 'timeoutlen'
 "       * 'showmode'
@@ -743,7 +790,6 @@ call s:method(s:, 'Map', 'showmode')
 
 function! s:Map_exec() abort dict
   call s:Builder__push_map(self._builder, self)
-  " TODO: Apply 'timeout', 'timeoutlen', 'showmode'
   for map in self._builder._env
     call s:Map__create_mappings_of_{map.map_type}(self, self._builder._submode, map)
   endfor
@@ -753,46 +799,50 @@ call s:method(s:, 'Map', 'exec')
 
 " <call-init-func>
 function! s:on_entering_submode(submode, mode, options, vim_options) " abort
+  " Call on_init() callbacks.
+  let ctx = {'submode': a:submode}
+  for Init_func in get(a:options, 'on_init', s:MAP_UI_DEFAULT_OPTIONS.on_init)
+    call Init_func(ctx)
+  endfor
   " Save vim options
   let saved_vim_options = {}
   for name in keys(a:vim_options)
     let saved_vim_options[name] = [bufnr('%'), getbufvar('%', '&' . name)]
+    call setbufvar('%', '&' . name, a:vim_options[name])
   endfor
   " Save scope-local variables for:
   " * karakuri#current()
   " * karakuri#restore_options()
+  let on_finalize =
+  \ get(a:options, 'on_finalize', s:MAP_UI_DEFAULT_OPTIONS.on_finalize)
   let s:running_submodes += [{
   \ 'submode': a:submode,
   \ 'vim_options': saved_vim_options,
+  \ 'on_finalize': on_finalize
   \}]
 
   " <Plug>karakuri.in({submode})
-  let keep_leaving_key =
-  \ get(a:options, 'keep_leaving_key', s:MAP_UI_DEFAULT_OPTIONS.keep_leaving_key)
-  let inherit =
-  \ get(a:options, 'inherit', s:MAP_UI_DEFAULT_OPTIONS.inherit)
   call s:create_map({
   \ 'mode': a:mode,
   \ 'mapcmd': 'noremap',
   \ 'options': '<expr>',
   \ 'lhs': printf('<Plug>karakuri.in(%s)', a:submode),
-  \ 'rhs': printf('<SID>on_fallback_action(%s,%s,%d,%d)',
+  \ 'rhs': printf('<SID>on_fallback_action(%s,%s,%s)',
   \               string(a:submode),
   \               string(saved_vim_options),
-  \               !!keep_leaving_key,
-  \               !!inherit)
+  \               string(a:options))
   \})
 
   " <Plug>karakuri.prompt({submode})
-  let Prompt_func =
-  \ get(a:options, 'prompt', s:MAP_UI_DEFAULT_OPTIONS.prompt)
+  let on_prompt =
+  \ get(a:options, 'on_prompt', s:MAP_UI_DEFAULT_OPTIONS.on_prompt)
   call s:create_map({
   \ 'mode': a:mode,
   \ 'mapcmd': 'noremap',
   \ 'options': '<expr>',
   \ 'lhs': printf('<Plug>karakuri.prompt(%s)', a:submode),
   \ 'rhs': printf('<SID>on_prompt_action(%s,%s)',
-  \               string(a:submode), string(Prompt_func))
+  \               string(a:submode), string(on_prompt))
   \})
 
   " If '<Plug>karakuri.leave_with_keyseqs({submode})' was defined:
@@ -812,8 +862,10 @@ function! s:on_entering_submode(submode, mode, options, vim_options) " abort
     \ 'mapcmd': 'noremap',
     \ 'options': '<expr>',
     \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, leave_lhs),
-    \ 'rhs': printf('<SID>on_leaving_submode(%s,%s)',
-    \               string(a:submode), string(saved_vim_options))
+    \ 'rhs': printf('<SID>on_leaving_submode(%s,%s,%s)',
+    \               string(a:submode),
+    \               string(saved_vim_options),
+    \               string(on_finalize))
     \})
   endfor
 
@@ -821,7 +873,7 @@ function! s:on_entering_submode(submode, mode, options, vim_options) " abort
 endfunction
 
 " <call-finalize-func>
-function! s:on_leaving_submode(submode, saved_vim_options) " abort
+function! s:on_leaving_submode(submode, saved_vim_options, on_finalize) " abort
   " Restore vim options
   for name in keys(a:saved_vim_options)
     let [buf, value] = a:saved_vim_options[name]
@@ -832,30 +884,48 @@ function! s:on_leaving_submode(submode, saved_vim_options) " abort
   " Clear command-line
   redraw
   echo ' '
+  " Call on_finalize() callbacks.
+  let ctx = {'submode': a:submode}
+  for Finalize_func in a:on_finalize
+    call Finalize_func(ctx)
+  endfor
 
   return ''
 endfunction
 
 " <call-fallback-func>
-function! s:on_fallback_action(submode, saved_vim_options, keep_leaving_key, inherit) " abort
+function! s:on_fallback_action(submode, saved_vim_options, options) " abort
   if getchar(1)
-    if !a:keep_leaving_key
+    " {map-lhs} was typed but not matched
+    if !get(a:options, 'keep_leaving_key', s:MAP_UI_DEFAULT_OPTIONS.keep_leaving_key)
       call getchar(0)
     endif
-    if a:inherit
+    if get(a:options, 'inherit', s:MAP_UI_DEFAULT_OPTIONS.inherit)
       call feedkeys(printf("\<Plug>karakuri.in(%s)", a:submode), 'm')
     endif
+  else
+    " Timeout
+    " Call on_timeout() callbacks.
+    let ctx = {'submode': a:submode}
+    for Timeout_func in get(a:options, 'on_timeout', s:MAP_UI_DEFAULT_OPTIONS.on_timeout)
+      call Timeout_func(ctx)
+    endfor
   endif
-  call s:on_leaving_submode(a:submode, a:saved_vim_options)
+  let on_finalize = get(a:options, 'on_finalize', s:MAP_UI_DEFAULT_OPTIONS.on_finalize)
+  call s:on_leaving_submode(a:submode, a:saved_vim_options, on_finalize)
 
   return ''
 endfunction
 
 " <call-prompt-func>
-function! s:on_prompt_action(submode, Prompt_func) " abort
+function! s:on_prompt_action(submode, on_prompt) " abort
   redraw
   echohl ModeMsg
-  echo a:Prompt_func(a:submode)
+  " Call on_prompt() callbacks.
+  let ctx = {'submode': a:submode}
+  for Prompt_func in a:on_prompt
+    call Prompt_func(ctx)
+  endfor
   echohl None
   return ''
 endfunction
