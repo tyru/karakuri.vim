@@ -156,13 +156,6 @@ function! s:method(scope, obj_name, method_name) abort
   \ function('<SNR>' . s:SIDP . '_' . a:obj_name . '_' . a:method_name)
 endfunction
 
-function! s:get_option(submode, global, local, name) abort
-  return has_key(a:local, a:name) ? a:local[a:name] :
-  \       has_key(a:global, a:name) ? a:global[a:name] :
-  \       has_key(s:MAP_UI_DEFAULT_OPTIONS, a:name) ? s:MAP_UI_DEFAULT_OPTIONS[a:name] :
-  \       s:throw(a:submode, "Required key '" . a:name . "' was not given.")
-endfunction
-
 function! s:create_map(args) abort
   execute a:args.mode . a:args.mapcmd
   \       a:args.options
@@ -560,11 +553,14 @@ function! s:Map__parse_options(map, options) abort
 endfunction
 
 function! s:Map__get_option(this, mapenv, name) abort
-  return s:get_option(
-  \         a:this._builder._submode,
-  \         a:this._builder._global,
-  \         a:mapenv,
-  \         a:name)
+  let submode = a:this._builder._submode
+  let name = a:name
+  let local = a:mapenv
+  let global = a:this._builder._global
+  return has_key(local, name) ? local[name] :
+  \       has_key(global, name) ? global[name] :
+  \       has_key(s:MAP_UI_DEFAULT_OPTIONS, name) ? s:MAP_UI_DEFAULT_OPTIONS[name] :
+  \       s:throw(submode, "Required key '" . name . "' was not given.")
 endfunction
 
 function! s:Map__create_mappings_of_enter_with(this, submode, mapenv) abort
@@ -684,21 +680,11 @@ endfunction
 
 function! s:Map__options_dict2str(this, mapenv) abort
   let str = ''
-  if s:Map__get_option(a:this, a:mapenv, 'silent')
-    let str .= '<silent>'
-  endif
-  if s:Map__get_option(a:this, a:mapenv, 'expr')
-    let str .= '<expr>'
-  endif
-  if s:Map__get_option(a:this, a:mapenv, 'buffer')
-    let str .= '<buffer>'
-  endif
-  if s:Map__get_option(a:this, a:mapenv, 'unique')
-    let str .= '<unique>'
-  endif
-  if s:Map__get_option(a:this, a:mapenv, 'nowait')
-    let str .= '<nowait>'
-  endif
+  for name in ['silent', 'expr', 'buffer', 'unique', 'nowait']
+    if s:Map__get_option(a:this, a:mapenv, name)
+      let str .= '<' . name . '>'
+    endif
+  endfor
   return str
 endfunction
 
