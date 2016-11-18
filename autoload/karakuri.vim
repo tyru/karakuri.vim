@@ -199,7 +199,9 @@ endfunction
 "
 
 function! karakuri#current() abort
-  return s:current_submode
+  if !empty(s:running_submodes)
+    return s:running_submodes[-1].submode
+  endif
 endfunction
 
 function! karakuri#restore_options() abort
@@ -241,7 +243,7 @@ endfunction
 
 function! karakuri#unmap(submode, modes, options, lhs) abort
   let map = karakuri#builder(a:submode).unmap()
-  let map = map.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
+  let map = map.mode(a:modes).lhs(a:lhs)
   if a:options !=# ''
     let map = s:Map__parse_options(map, a:options)
   endif
@@ -814,6 +816,7 @@ call s:method(s:, 'Map', 'exec')
 
 
 " <call-init-func>
+" vint: -ProhibitNoAbortFunction
 function! s:on_entering_submode(submode, mode, options, vim_options) " abort
   " Call on_init() callbacks.
   let ctx = {'submode': a:submode}
@@ -887,8 +890,10 @@ function! s:on_entering_submode(submode, mode, options, vim_options) " abort
 
   return ''
 endfunction
+" vint: +ProhibitNoAbortFunction
 
 " <call-finalize-func>
+" vint: -ProhibitNoAbortFunction
 function! s:on_leaving_submode(submode, saved_vim_options, on_finalize) " abort
   " Restore vim options
   for name in keys(a:saved_vim_options)
@@ -908,8 +913,10 @@ function! s:on_leaving_submode(submode, saved_vim_options, on_finalize) " abort
 
   return ''
 endfunction
+" vint: +ProhibitNoAbortFunction
 
 " <call-fallback-func>
+" vint: -ProhibitNoAbortFunction
 function! s:on_fallback_action(submode, saved_vim_options, options) " abort
   if getchar(1)
     " {map-lhs} was typed but not matched
@@ -932,8 +939,10 @@ function! s:on_fallback_action(submode, saved_vim_options, options) " abort
 
   return ''
 endfunction
+" vint: +ProhibitNoAbortFunction
 
 " <call-prompt-func>
+" vint: -ProhibitNoAbortFunction
 function! s:on_prompt_action(submode, on_prompt) " abort
   redraw
   echohl ModeMsg
@@ -945,4 +954,5 @@ function! s:on_prompt_action(submode, on_prompt) " abort
   echohl None
   return ''
 endfunction
+" vint: +ProhibitNoAbortFunction
 

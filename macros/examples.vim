@@ -71,16 +71,16 @@ call karakuri#builder('winsize')
 
 " Change options
 function! s:init_func(ctx) abort
-  echom printf("[%s] Initializing...", a:ctx.submode)
+  echom printf('[%s] Initializing...', a:ctx.submode)
 endfunction
 function! s:prompt_func(ctx) abort
-  return printf("[%s] <,>:dec/inc width, -,+:dec/inc height", a:ctx.submode)
+  return printf('[%s] <,>:dec/inc width, -,+:dec/inc height', a:ctx.submode)
 endfunction
 function! s:timeout_func(ctx) abort
-  echom printf("[%s] Timeout!", a:ctx.submode)
+  echom printf('[%s] Timeout!', a:ctx.submode)
 endfunction
 function! s:finalize_func(ctx) abort
-  echom printf("[%s] Finalizing...", a:ctx.submode)
+  echom printf('[%s] Finalizing...', a:ctx.submode)
 endfunction
 
 call karakuri#builder('winsize')
