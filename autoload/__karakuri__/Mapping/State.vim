@@ -139,13 +139,14 @@ function! s:_validate_non_empty_string(submode, str) abort
 endfunction
 
 function! s:_throw(submode, msg) abort
-  throw 'karakuri: ' . a:submode . ': ' . a:msg
+  throw 'Mapping.State: ' . a:submode . ': ' . a:msg
 endfunction
 
 function! s:_SID() abort
   return matchstr(expand('<sfile>'), '<SNR>\zs\d\+\ze__SID$')
 endfunction
 let s:SIDP = s:_SID()
+delfunction s:_SID
 
 function! s:_method(scope, obj_name, method_name) abort
   let a:scope[a:obj_name][a:method_name] =
@@ -172,6 +173,176 @@ endfunction
 function! s:builder(submode) abort
   return s:__Builder_new(a:submode)
 endfunction
+
+" <call-init-func>
+" vint: -ProhibitNoAbortFunction
+function! s:on_entering_submode(submode, mode, options, vim_options) " abort
+  " Save vim options
+  let saved_vim_options = {}
+  for name in keys(a:vim_options)
+    let saved_vim_options[name] = [bufnr('%'), getbufvar('%', '&' . name)]
+  endfor
+  " Save scope-local variables for:
+  " * karakuri#current()
+  " * karakuri#restore_options()
+  let on_finalize =
+  \ get(a:options, 'on_finalize', s:MAP_UI_DEFAULT_OPTIONS.on_finalize)
+  " Call on_init() callbacks.
+  let ctx = {
+  \ 'submode': a:submode,
+  \ 'vim_options': saved_vim_options,
+  \ 'on_finalize': on_finalize
+  \}
+  lockvar! ctx
+  try
+    for Init_func in get(a:options, 'on_init', s:MAP_UI_DEFAULT_OPTIONS.on_init)
+      call Init_func(ctx)
+    endfor
+  catch
+    echohl ErrorMsg
+    echom v:exception 'at' v:throwpoint
+    echohl None
+  endtry
+
+  " Change vim options
+  for name in keys(a:vim_options)
+    call setbufvar('%', '&' . name, a:vim_options[name])
+  endfor
+
+  " <Plug>karakuri.in({submode})
+  call s:_create_map({
+  \ 'mode': a:mode,
+  \ 'mapcmd': 'noremap',
+  \ 'options': '<expr>',
+  \ 'lhs': printf('<Plug>karakuri.in(%s)', a:submode),
+  \ 'rhs': printf('<SID>on_fallback_action(%s,%s,%s)',
+  \               string(a:submode),
+  \               string(saved_vim_options),
+  \               string(a:options))
+  \})
+
+  " <Plug>karakuri.prompt({submode})
+  let on_prompt =
+  \ get(a:options, 'on_prompt', s:MAP_UI_DEFAULT_OPTIONS.on_prompt)
+  call s:_create_map({
+  \ 'mode': a:mode,
+  \ 'mapcmd': 'noremap',
+  \ 'options': '<expr>',
+  \ 'lhs': printf('<Plug>karakuri.prompt(%s)', a:submode),
+  \ 'rhs': printf('<SID>on_prompt_action(%s,%s)',
+  \               string(a:submode), string(on_prompt))
+  \})
+
+  " If '<Plug>karakuri.leave_with_keyseqs({submode})' was defined:
+  "   Define <Plug>karakuri.in({submode}){leave-with-lhs}
+  " Else:
+  "   Define <Plug>karakuri.in({submode}){default-keyseqs-to-leave}
+  let exist_lhs = printf('<Plug>karakuri.leave_with_keyseqs(%s)', a:submode)
+  let leave_lhs = maparg(exist_lhs, a:mode, 0)
+  if leave_lhs !=# ''
+    let leave_lhs_list = {s:JSON_DECODE}(leave_lhs)
+  else
+    let leave_lhs_list = deepcopy(s:MAP_UI_DEFAULT_OPTIONS.keyseqs_to_leave)
+  endif
+  for leave_lhs in leave_lhs_list
+    call s:_create_map({
+    \ 'mode': a:mode,
+    \ 'mapcmd': 'noremap',
+    \ 'options': '<expr>',
+    \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, leave_lhs),
+    \ 'rhs': printf('<SID>on_leaving_submode(%s,%s,%s)',
+    \               string(a:submode),
+    \               string(saved_vim_options),
+    \               string(on_finalize))
+    \})
+  endfor
+
+  return ''
+endfunction
+" vint: +ProhibitNoAbortFunction
+
+" <call-finalize-func>
+" vint: -ProhibitNoAbortFunction
+function! s:on_leaving_submode(submode, saved_vim_options, on_finalize) " abort
+  " Restore vim options
+  for name in keys(a:saved_vim_options)
+    let [buf, value] = a:saved_vim_options[name]
+    call setbufvar(buf, '&' . name, value)
+  endfor
+  " Clear command-line
+  redraw
+  echo ' '
+  " Call on_finalize() callbacks.
+  let ctx = {'submode': a:submode}
+  lockvar! ctx
+  try
+    for Finalize_func in a:on_finalize
+      call Finalize_func(ctx)
+    endfor
+  catch
+    echohl ErrorMsg
+    echom v:exception 'at' v:throwpoint
+    echohl None
+  endtry
+
+  return ''
+endfunction
+" vint: +ProhibitNoAbortFunction
+
+" <call-fallback-func>
+" vint: -ProhibitNoAbortFunction
+function! s:on_fallback_action(submode, saved_vim_options, options) " abort
+  if getchar(1)
+    " {map-lhs} was typed but not matched
+    if !get(a:options, 'keep_leaving_key', s:MAP_UI_DEFAULT_OPTIONS.keep_leaving_key)
+      call getchar(0)
+    endif
+    if get(a:options, 'inherit', s:MAP_UI_DEFAULT_OPTIONS.inherit)
+      call feedkeys(printf("\<Plug>karakuri.in(%s)", a:submode), 'm')
+    endif
+  else
+    " Timeout
+    " Call on_timeout() callbacks.
+    let ctx = {'submode': a:submode}
+    lockvar! ctx
+    try
+      for Timeout_func in get(a:options, 'on_timeout', s:MAP_UI_DEFAULT_OPTIONS.on_timeout)
+        call Timeout_func(ctx)
+      endfor
+    catch
+      echohl ErrorMsg
+      echom v:exception 'at' v:throwpoint
+      echohl None
+    endtry
+  endif
+  let on_finalize = get(a:options, 'on_finalize', s:MAP_UI_DEFAULT_OPTIONS.on_finalize)
+  call s:on_leaving_submode(a:submode, a:saved_vim_options, on_finalize)
+
+  return ''
+endfunction
+" vint: +ProhibitNoAbortFunction
+
+" <call-prompt-func>
+" vint: -ProhibitNoAbortFunction
+function! s:on_prompt_action(submode, on_prompt) " abort
+  redraw
+  echohl ModeMsg
+  " Call on_prompt() callbacks.
+  let ctx = {'submode': a:submode}
+  lockvar! ctx
+  try
+    for Prompt_func in a:on_prompt
+      call Prompt_func(ctx)
+    endfor
+  catch
+    echohl ErrorMsg
+    echom v:exception 'at' v:throwpoint
+  finally
+    echohl None
+  endtry
+  return ''
+endfunction
+" vint: +ProhibitNoAbortFunction
 
 
 " Builder:
@@ -552,7 +723,7 @@ function! s:__Map_update_init_mapping(this, mode) abort
   \ 'mapcmd': 'noremap',
   \ 'options': '<expr>',
   \ 'lhs': printf('<Plug>karakuri.init(%s)', submode),
-  \ 'rhs': printf('<SID>_on_entering_submode(%s,%s,%s,%s)',
+  \ 'rhs': printf('<SID>on_entering_submode(%s,%s,%s,%s)',
   \               string(submode), string(a:mode),
   \               string(options), string(vim_options))
   \})
@@ -727,147 +898,6 @@ function! s:_Map_parse_compat_options(options) abort dict
 endfunction
 call s:_method(s:, 'Map', 'parse_compat_options')
 
-
-" <call-init-func>
-" vint: -ProhibitNoAbortFunction
-function! s:_on_entering_submode(submode, mode, options, vim_options) " abort
-  " Call on_init() callbacks.
-  let ctx = {'submode': a:submode}
-  for Init_func in get(a:options, 'on_init', s:MAP_UI_DEFAULT_OPTIONS.on_init)
-    call Init_func(ctx)
-  endfor
-  " Save vim options
-  let saved_vim_options = {}
-  for name in keys(a:vim_options)
-    let saved_vim_options[name] = [bufnr('%'), getbufvar('%', '&' . name)]
-    call setbufvar('%', '&' . name, a:vim_options[name])
-  endfor
-  " Save scope-local variables for:
-  " * karakuri#current()
-  " * karakuri#restore_options()
-  let on_finalize =
-  \ get(a:options, 'on_finalize', s:MAP_UI_DEFAULT_OPTIONS.on_finalize)
-  let s:running_submodes += [{
-  \ 'submode': a:submode,
-  \ 'vim_options': saved_vim_options,
-  \ 'on_finalize': on_finalize
-  \}]
-
-  " <Plug>karakuri.in({submode})
-  call s:_create_map({
-  \ 'mode': a:mode,
-  \ 'mapcmd': 'noremap',
-  \ 'options': '<expr>',
-  \ 'lhs': printf('<Plug>karakuri.in(%s)', a:submode),
-  \ 'rhs': printf('<SID>on_fallback_action(%s,%s,%s)',
-  \               string(a:submode),
-  \               string(saved_vim_options),
-  \               string(a:options))
-  \})
-
-  " <Plug>karakuri.prompt({submode})
-  let on_prompt =
-  \ get(a:options, 'on_prompt', s:MAP_UI_DEFAULT_OPTIONS.on_prompt)
-  call s:_create_map({
-  \ 'mode': a:mode,
-  \ 'mapcmd': 'noremap',
-  \ 'options': '<expr>',
-  \ 'lhs': printf('<Plug>karakuri.prompt(%s)', a:submode),
-  \ 'rhs': printf('<SID>on_prompt_action(%s,%s)',
-  \               string(a:submode), string(on_prompt))
-  \})
-
-  " If '<Plug>karakuri.leave_with_keyseqs({submode})' was defined:
-  "   Define <Plug>karakuri.in({submode}){leave-with-lhs}
-  " Else:
-  "   Define <Plug>karakuri.in({submode}){default-keyseqs-to-leave}
-  let exist_lhs = printf('<Plug>karakuri.leave_with_keyseqs(%s)', a:submode)
-  let leave_lhs = maparg(exist_lhs, a:mode, 0)
-  if leave_lhs !=# ''
-    let leave_lhs_list = {s:JSON_DECODE}(leave_lhs)
-  else
-    let leave_lhs_list = deepcopy(s:MAP_UI_DEFAULT_OPTIONS.keyseqs_to_leave)
-  endif
-  for leave_lhs in leave_lhs_list
-    call s:_create_map({
-    \ 'mode': a:mode,
-    \ 'mapcmd': 'noremap',
-    \ 'options': '<expr>',
-    \ 'lhs': printf('<Plug>karakuri.in(%s)%s', a:submode, leave_lhs),
-    \ 'rhs': printf('<SID>_on_leaving_submode(%s,%s,%s)',
-    \               string(a:submode),
-    \               string(saved_vim_options),
-    \               string(on_finalize))
-    \})
-  endfor
-
-  return ''
-endfunction
-" vint: +ProhibitNoAbortFunction
-
-" <call-finalize-func>
-" vint: -ProhibitNoAbortFunction
-function! s:_on_leaving_submode(submode, saved_vim_options, on_finalize) " abort
-  " Restore vim options
-  for name in keys(a:saved_vim_options)
-    let [buf, value] = a:saved_vim_options[name]
-    call setbufvar(buf, '&' . name, value)
-  endfor
-  " Clear scope-local variables
-  call remove(s:running_submodes, -1)
-  " Clear command-line
-  redraw
-  echo ' '
-  " Call on_finalize() callbacks.
-  let ctx = {'submode': a:submode}
-  for Finalize_func in a:on_finalize
-    call Finalize_func(ctx)
-  endfor
-
-  return ''
-endfunction
-" vint: +ProhibitNoAbortFunction
-
-" <call-fallback-func>
-" vint: -ProhibitNoAbortFunction
-function! s:_on_fallback_action(submode, saved_vim_options, options) " abort
-  if getchar(1)
-    " {map-lhs} was typed but not matched
-    if !get(a:options, 'keep_leaving_key', s:MAP_UI_DEFAULT_OPTIONS.keep_leaving_key)
-      call getchar(0)
-    endif
-    if get(a:options, 'inherit', s:MAP_UI_DEFAULT_OPTIONS.inherit)
-      call feedkeys(printf("\<Plug>karakuri.in(%s)", a:submode), 'm')
-    endif
-  else
-    " Timeout
-    " Call on_timeout() callbacks.
-    let ctx = {'submode': a:submode}
-    for Timeout_func in get(a:options, 'on_timeout', s:MAP_UI_DEFAULT_OPTIONS.on_timeout)
-      call Timeout_func(ctx)
-    endfor
-  endif
-  let on_finalize = get(a:options, 'on_finalize', s:MAP_UI_DEFAULT_OPTIONS.on_finalize)
-  call s:_on_leaving_submode(a:submode, a:saved_vim_options, on_finalize)
-
-  return ''
-endfunction
-" vint: +ProhibitNoAbortFunction
-
-" <call-prompt-func>
-" vint: -ProhibitNoAbortFunction
-function! s:_on_prompt_action(submode, on_prompt) " abort
-  redraw
-  echohl ModeMsg
-  " Call on_prompt() callbacks.
-  let ctx = {'submode': a:submode}
-  for Prompt_func in a:on_prompt
-    call Prompt_func(ctx)
-  endfor
-  echohl None
-  return ''
-endfunction
-" vint: +ProhibitNoAbortFunction
 
 
 

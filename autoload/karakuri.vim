@@ -11,6 +11,35 @@ let s:State = s:V.import('Mapping.State')
 unlet s:V
 
 
+"
+" Utilities
+"
+
+function! s:push_running_submode(ctx) abort
+  let s:running_submodes += [a:ctx]
+endfunction
+
+function! s:pop_running_submode(ctx) abort
+  if !empty(s:running_submodes) &&
+  \ a:ctx.submode ==# s:running_submodes[-1].submode
+    call remove(s:running_submodes, -1)
+  else
+    call s:throw(a:ctx.submode, 'submode of top of the stack is mismatch: '
+    \          . 's:running_submodes = ' . string(s:running_submodes))
+  endif
+endfunction
+
+function! s:throw(submode, msg) abort
+  throw 'karakuri: ' . a:submode . ': ' . a:msg
+endfunction
+
+function! s:SID() abort
+  return matchstr(expand('<sfile>'), '<SNR>\zs\d\+\ze_SID$')
+endfunction
+let s:SIDP = s:SID()
+delfunction s:SID
+
+
 " The entrance to core logic:
 "
 " * karakuri#builder(submode : String) : Builder
@@ -18,6 +47,8 @@ unlet s:V
 
 function! karakuri#builder(submode) abort
   return s:State.builder(a:submode)
+        \.on_init(function('<SNR>' . s:SIDP . '_push_running_submode'))
+        \.on_finalize(function('<SNR>' . s:SIDP . '_pop_running_submode'))
 endfunction
 
 
@@ -59,7 +90,7 @@ endfunction
 function! karakuri#restore_options() abort
   while !empty(s:running_submodes)
     let r = remove(s:running_submodes, -1)
-    call s:on_leaving_submode(r.submode, r.vim_options, r.on_finalize)
+    call s:State.on_leaving_submode(r.submode, r.vim_options, r.on_finalize)
   endwhile
 endfunction
 
