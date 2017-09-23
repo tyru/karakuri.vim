@@ -40,13 +40,13 @@ let s:SIDP = s:SID()
 delfunction s:SID
 
 
-" The entrance to core logic:
-"
-" * karakuri#builder(submode : String) : Builder
-"
+" karakuri#define(submode : String, def : Dictionary) : Unit
+"   Define {def} as {submode}'s definition.
+"   It creates set of mappings.
+"   If {submode}'s definition exists already, it will be overwritten.
 
-function! karakuri#builder(submode) abort
-  return s:State.builder(a:submode)
+function! karakuri#define(submode, def) abort
+  call s:State.define(a:submode, a:def)
         \.on_init(function('<SNR>' . s:SIDP . '_push_running_submode'))
         \.on_finalize(function('<SNR>' . s:SIDP . '_pop_running_submode'))
 endfunction
@@ -95,40 +95,54 @@ function! karakuri#restore_options() abort
 endfunction
 
 function! karakuri#enter_with(submode, modes, options, lhs, ...) abort
-  let map = karakuri#builder(a:submode).enter_with()
-  let map = map.mode(a:modes).lhs(a:lhs)
+  let map = {'mode': a:modes, 'lhs': a:lhs}
   if a:options !=# ''
-    let map = map.parse_compat_options(a:options)
+    call extend(map, s:parse_compat_options(a:options))
   endif
   if a:0
-    let map = map.rhs(a:1)
+    let map.rhs = a:1
   endif
-  call map.exec()
+  call karakuri#define(a:submode, {'enter_with': [map]})
 endfunction
 
 function! karakuri#leave_with(submode, modes, options, lhs) abort
-  let map = karakuri#builder(a:submode).leave_with()
-  let map = map.mode(a:modes).lhs(a:lhs)
+  let map = {'mode': a:modes, 'lhs': a:lhs}
   if a:options !=# ''
-    let map = map.parse_compat_options(a:options)
+    call extend(map, s:parse_compat_options(a:options))
   endif
-  call map.exec()
+  call karakuri#define(a:submode, {'leave_with': [map]})
 endfunction
 
 function! karakuri#map(submode, modes, options, lhs, rhs) abort
-  let map = karakuri#builder(a:submode).map()
-  let map = map.mode(a:modes).lhs(a:lhs).rhs(a:rhs)
+  let map = {'mode': a:modes, 'lhs': a:lhs, 'rhs': a:rhs}
   if a:options !=# ''
-    let map = map.parse_compat_options(a:options)
+    call extend(map, s:parse_compat_options(a:options))
   endif
-  call map.exec()
+  call karakuri#define(a:submode, {'map': [map]})
 endfunction
 
 function! karakuri#unmap(submode, modes, options, lhs) abort
-  let map = karakuri#builder(a:submode).unmap()
-  let map = map.mode(a:modes).lhs(a:lhs)
+  let map = {'mode': a:modes, 'lhs': a:lhs}
   if a:options !=# ''
-    let map = map.parse_compat_options(a:options)
+    call extend(map, s:parse_compat_options(a:options))
   endif
-  call map.exec()
+  call karakuri#define(a:submode, {'unmap': [map]})
+endfunction
+
+
+let s:COMPAT_OPTIONS = {
+\ 'b': {'buffer': 1},
+\ 'e': {'expr': 1},
+\ 'r': {'noremap': 0},
+\ 's': {'silent': 1},
+\ 'u': {'unique': 1},
+\ 'x': {'keep_leaving_key': 1}
+\}
+
+function! s:parse_compat_options(options) abort
+  let opts = {}
+  for c in split(a:options, '\zs')
+    call extend(opts, get(s:COMPAT_OPTIONS, c, {}))
+  endfor
+  return opts
 endfunction

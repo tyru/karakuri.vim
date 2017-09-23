@@ -6,11 +6,11 @@ set cpo&vim
 "
 " 1. {enter-with-lhs}
 " 2. <Plug>karakuri.enter_with_rhs({submode},{enter-with-lhs})
-" 3. <Plug>karakuri.init({submode}) (<call-init-func>)
+" 3. <Plug>karakuri.init({submode}) (s:on_entering_submode())
 " 3.1. Save vim options
 " 3.2. Set current submode (karakuri#current())
 " 4. <Plug>karakuri.in({submode})
-"   4.1. timeout -> Go to "5. <call-fallback-func>"
+"   4.1. timeout -> Go to "5. Fallback"
 "   4.2. User types a key {map-lhs}
 "     4.2.1. <Plug>karakuri.in({submode}){map-lhs} is defined:
 "       4.2.1.1. {map-lhs} is <leave-with-keyseqs> -> Go to "6. Finalization"
@@ -19,8 +19,8 @@ set cpo&vim
 "         4.2.1.2.2. <Plug>karakuri.prompt({submode})
 "         4.2.1.2.3. Go to "4. <Plug>karakuri.in({submode})"
 "     4.2.2. <Plug>karakuri.in({submode}){map-lhs} is NOT defined:
-"       4.2.2.1. Go to "5. <call-fallback-func>"
-" 5. <call-fallback-func>
+"       4.2.2.1. Go to "5. Fallback"
+" 5. Fallback (s:on_fallback_action())
 "   5.1. getchar(1) is true ({map-lhs} was typed but not matched)
 "     5.1.1. 'keep_leaving_key' is false -> getchar(0)
 "     5.1.2. 'inherit' is true -> feedkeys("\<Plug>karakuri.in({submode})", 'm')
@@ -28,7 +28,7 @@ set cpo&vim
 "   5.2. getchar(1) is false (timeout)
 "     5.2.1. Go to "6. Finalization"
 " 6. Finalization
-"   6.1. <call-finalize-func>
+"   6.1. s:on_leaving_submode()
 "   6.1.1. Restore saved vim options
 "   6.1.2. Clear current submode (karakuri#current())
 "   6.2.  Go to parent mode.
@@ -170,11 +170,17 @@ endfunction
 " Public interfaces
 "
 
+" submode : String = submode
+function! s:define(submode, def) abort
+  " TODO
+endfunction
+
+
+
 function! s:builder(submode) abort
   return s:__Builder_new(a:submode)
 endfunction
 
-" <call-init-func>
 " vint: -ProhibitNoAbortFunction
 function! s:on_entering_submode(submode, mode, options, vim_options) " abort
   " Save vim options
@@ -261,7 +267,6 @@ function! s:on_entering_submode(submode, mode, options, vim_options) " abort
 endfunction
 " vint: +ProhibitNoAbortFunction
 
-" <call-finalize-func>
 " vint: -ProhibitNoAbortFunction
 function! s:on_leaving_submode(submode, saved_vim_options, on_finalize) " abort
   " Restore vim options
@@ -289,7 +294,6 @@ function! s:on_leaving_submode(submode, saved_vim_options, on_finalize) " abort
 endfunction
 " vint: +ProhibitNoAbortFunction
 
-" <call-fallback-func>
 " vint: -ProhibitNoAbortFunction
 function! s:on_fallback_action(submode, saved_vim_options, options) " abort
   if getchar(1)
@@ -322,7 +326,6 @@ function! s:on_fallback_action(submode, saved_vim_options, options) " abort
 endfunction
 " vint: +ProhibitNoAbortFunction
 
-" <call-prompt-func>
 " vint: -ProhibitNoAbortFunction
 function! s:on_prompt_action(submode, on_prompt) " abort
   redraw
@@ -874,31 +877,6 @@ function! s:_Map_exec() abort dict
   endfor
 endfunction
 call s:_method(s:, 'Map', 'exec')
-
-function! s:_Map_parse_compat_options(options) abort dict
-  if a:options =~# 'b'
-    let self = self.buffer(1)
-  endif
-  if a:options =~# 'e'
-    let self = self.expr(1)
-  endif
-  if a:options =~# 'r'
-    let self = self.noremap(0)
-  endif
-  if a:options =~# 's'
-    let self = self.silent(1)
-  endif
-  if a:options =~# 'u'
-    let self = self.unique(1)
-  endif
-  if a:options =~# 'x'
-    let self = self.keep_leaving_key(1)
-  endif
-  return self
-endfunction
-call s:_method(s:, 'Map', 'parse_compat_options')
-
-
 
 
 let &cpo = s:save_cpo
